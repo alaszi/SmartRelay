@@ -1,0 +1,21 @@
+[
+    {
+        "id": "example_machine_01",
+        "name": "Példa gép #1",
+        "location": "Raktár A",
+        "tasks": [
+            {
+                "name": "Olajcsere",
+                "interval_days": 90,
+                "next_due": "2026-07-01",
+                "responsible": "Kovács János"
+            },
+            {
+                "name": "Szűrő ellenőrzés",
+                "interval_days": 30,
+                "next_due": "2026-06-25",
+                "responsible": "Kovács János"
+            }
+        ]
+    }
+]

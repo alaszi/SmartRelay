@@ -1,0 +1,18 @@
+# Environment & secrets
+.env
+
+# Composer
+/vendor/
+
+# Logs
+/logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp

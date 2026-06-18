@@ -2,12 +2,36 @@ name: Claude Napi Automatizálás
 
 on:
   schedule:
-    - cron: '0 1 * * *'
-  workflow_dispatch:
+    - cron: '0 1 * * *'   # 03:00 román idő (UTC+2)
+  workflow_dispatch:        # kézzel is indítható
 
 jobs:
-  daily-improvement:
+
+  # ─── 1. TESZTEK FUTTATÁSA (kapu a fejlesztés előtt) ──────────────────────
+  test:
+    name: Unit tesztek
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: PHP beállítás
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          extensions: curl, json, pdo
+          coverage: none
+
+      - name: Composer függőségek telepítése
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Unit tesztek futtatása
+        run: composer test
+
+  # ─── 2. CLAUDE FEJLESZT (csak ha a tesztek zöldek) ───────────────────────
+  daily-improvement:
+    name: Claude napi fejlesztés
+    runs-on: ubuntu-latest
+    needs: test           # csak zöld tesztek után fut!
     permissions:
       contents: write
       pull-requests: write
@@ -15,28 +39,75 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
+
+      - name: PHP beállítás
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          extensions: curl, json, pdo
+          coverage: none
+
+      - name: Composer függőségek telepítése
+        run: composer install --no-interaction --prefer-dist
+
       - uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
-            Nézd át a SmartRelay projektet. Olvasd el a CLAUDE.md fájlt.
-            1. Ellenőrizd van-e eltört teszt vagy hibás parser
-            2. Javítsd amit tudsz önállóan (CLAUDE.md alapján)
-            3. Ami emberi döntést igényel, nyiss PR-t
-            4. Írj összefoglalót mit csináltál
+            Olvasd el a CLAUDE.md fájlt — ez az elsődleges munkautasítás.
 
+            KÖTELEZŐ LÉPÉSEK SORRENDBEN:
+            1. Futtasd: composer test
+               - Ha bármely teszt eltört, először azt javítsd
+               - Ne folytasd amíg minden teszt zöld nem lesz
+
+            2. Peer review — ellenőrizd:
+               - Van-e TODO komment éles kódban?
+               - Van-e hardcoded kulcs vagy jelszó?
+               - Minden publikus metódushoz van-e teszt?
+
+            3. Végezd el a napi fejlesztési feladatokat (CLAUDE.md alapján):
+               - Ellenőrizd az adatforrások elérhetőségét
+               - Javítsd az eltört parsereket (unit teszttel együtt)
+               - Generáld/frissítsd a riasztás tartalmakat
+
+            4. Mielőtt commitolsz: futtasd újra: composer test
+               - Ha nem zöld: javítsd, csak akkor commitolj
+
+            5. Írj összefoglalót mit csináltál (GitHub Actions log-ba)
+
+            TILOS:
+            - Failing tesztekkel commitolni
+            - Hardcoded értékeket beírni
+            - Interfész módosítást PR nélkül merge-elni
+            - Deployment szkriptet módosítani
+
+  # ─── 3. DEPLOY (csak ha mindkét előző lépés sikeres) ─────────────────────
   deploy:
+    name: Deploy smartrelay.ro-ra
     runs-on: ubuntu-latest
-    needs: daily-improvement
+    needs: [test, daily-improvement]   # MINDKETTŐ kell!
     if: github.ref == 'refs/heads/main'
     steps:
-      - name: Deploy smartrelay.ro-ra
+      - name: SSH deploy
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            set -e   # bármely hiba leállítja a deployt
+
             cd /var/www/smartrelay.ro/SmartRelay
+
+            echo "=== Git pull ==="
             git pull origin main
-            echo "✅ Deploy kész: $(date)"
+
+            echo "=== Composer install ==="
+            composer install --no-interaction --prefer-dist --no-dev
+
+            echo "=== Jogosultságok ==="
+            mkdir -p logs
+            chmod 755 logs
+
+            echo "✅ Deploy kész: $(date '+%Y-%m-%d %H:%M:%S')"
