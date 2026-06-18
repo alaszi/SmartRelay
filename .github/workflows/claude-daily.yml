@@ -1,0 +1,25 @@
+name: Claude Napi Automatizálás
+
+on:
+  schedule:
+    - cron: '0 1 * * *'  # minden nap 01:00 UTC = 03:00 román idő
+  workflow_dispatch:      # kézzel is indítható
+
+jobs:
+  daily-improvement:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Nézd át a SmartRelay projektet. Olvasd el a CLAUDE.md fájlt.
+            1. Ellenőrizd van-e eltört teszt vagy hibás parser
+            2. Javítsd amit tudsz önállóan (CLAUDE.md alapján)
+            3. Ami emberi döntést igényel, nyiss PR-t
+            4. Írj összefoglalót mit csináltál
