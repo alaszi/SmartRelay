@@ -7,11 +7,11 @@ namespace SmartRelay\Services;
 use SmartRelay\Collectors\MeteoYrCollector;
 
 /**
- * Adatszolgáltató a publikus landing page-hez.
+ * Data provider for the public landing page.
  *
- * Elválasztja az adat-logikát a HTML rendertéstől, hogy tesztelhető
- * legyen a CLAUDE.md szabályai szerint. A public/index.php csak ezt
- * hívja meg, sosem fér hozzá direktben a Collector-hoz.
+ * Separates data logic from HTML rendering so it stays testable per
+ * CLAUDE.md rules. public/index.php only calls this — it never
+ * touches the Collector directly.
  */
 class LandingPageData
 {
@@ -23,9 +23,9 @@ class LandingPageData
     }
 
     /**
-     * Élő időjárás pillanatkép a hero panelhez.
-     * Sosem dob hibát — ha az adat nem elérhető, "üres állapot" jellegű
-     * választ ad, nem hibaüzenetet.
+     * Live weather snapshot for the hero panel.
+     * Never throws — if data isn't available, returns an "empty state"
+     * response rather than an error message.
      */
     public function getWeatherSnapshot(): array
     {
@@ -52,7 +52,7 @@ class LandingPageData
             'humidity'      => $current['humidity'] . '%',
             'precipitation' => $current['precipitation'] . ' mm/h',
             'description'   => $current['description'],
-            'location'      => $result['location'] ?? 'Gyergyócsomafalva',
+            'location'      => $result['location'] ?? 'Default Location',
             'updated_at'    => $this->formatTimestamp($result['collected_at'] ?? ''),
         ];
     }
@@ -70,8 +70,8 @@ class LandingPageData
             'wind'          => '—',
             'humidity'      => '—',
             'precipitation' => '—',
-            'description'   => 'Élő adat hamarosan',
-            'location'      => 'Gyergyócsomafalva',
+            'description'   => 'Live data coming soon',
+            'location'      => 'Default Location',
             'updated_at'    => '',
         ];
     }

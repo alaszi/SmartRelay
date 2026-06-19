@@ -16,12 +16,12 @@ function e(string $s): string
 }
 ?>
 <!DOCTYPE html>
-<html lang="hu">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SmartRelay — Jelzés a Gyergyó-Hargita régióból</title>
-<meta name="description" content="A SmartRelay figyeli az időjárást és a karbantartási határidőket a Gyergyó-Hargita régióban, és szól, mielőtt gond lenne belőle.">
+<title>SmartRelay — Signals before you need them</title>
+<meta name="description" content="SmartRelay watches the weather and maintenance schedules for your location, and speaks up only when it actually matters.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -32,7 +32,7 @@ function e(string $s): string
 <header class="site-header">
   <div class="wrap site-header__inner">
     <a href="/" class="logo">SmartRelay</a>
-    <span class="logo-region">Gyergyó · Hargita</span>
+    <span class="logo-region">Live signal relay</span>
   </div>
 </header>
 
@@ -52,23 +52,23 @@ function e(string $s): string
 
     <div class="wrap hero__inner">
       <div class="hero__text">
-        <p class="eyebrow">Élő jelzés — Gyergyó / Hargita</p>
-        <h1>Jelek a hegyekből,<br>mielőtt szükséged<br>lenne rájuk.</h1>
+        <p class="eyebrow">Live signal — your location</p>
+        <h1>Signals from the field,<br>before you<br>need them.</h1>
         <p class="hero__sub">
-          A SmartRelay figyeli az időjárást és a karbantartási határidőket
-          a régióban, és csak akkor szól, ha tényleg számít.
+          SmartRelay watches the weather and maintenance schedules for your
+          location, and only speaks up when it actually matters.
         </p>
         <div class="hero__actions">
-          <a class="btn btn--primary" href="<?= e($channelUrl) ?>">Csatlakozz a Telegram csatornához</a>
-          <a class="btn btn--text" href="#funkciok">Mire való ez pontosan?</a>
+          <a class="btn btn--primary" href="<?= e($channelUrl) ?>">Join the Telegram channel</a>
+          <a class="btn btn--text" href="#features">What does this actually do?</a>
         </div>
       </div>
 
-      <div class="readout" role="group" aria-label="Élő időjárás adatok">
+      <div class="readout" role="group" aria-label="Live weather data">
         <div class="readout__head">
           <span class="readout__location"><?= e($weather['location']) ?></span>
           <?php if ($weather['available']): ?>
-            <span class="readout__updated">frissítve <?= e($weather['updated_at']) ?></span>
+            <span class="readout__updated">updated <?= e($weather['updated_at']) ?></span>
           <?php endif; ?>
         </div>
 
@@ -76,19 +76,19 @@ function e(string $s): string
           <div class="readout__grid">
             <div class="readout__item">
               <span class="readout__value"><?= e($weather['temperature']) ?></span>
-              <span class="readout__label">hőmérséklet</span>
+              <span class="readout__label">temperature</span>
             </div>
             <div class="readout__item">
               <span class="readout__value"><?= e($weather['wind']) ?></span>
-              <span class="readout__label">szél</span>
+              <span class="readout__label">wind</span>
             </div>
             <div class="readout__item">
               <span class="readout__value"><?= e($weather['humidity']) ?></span>
-              <span class="readout__label">páratartalom</span>
+              <span class="readout__label">humidity</span>
             </div>
             <div class="readout__item">
               <span class="readout__value"><?= e($weather['precipitation']) ?></span>
-              <span class="readout__label">csapadék</span>
+              <span class="readout__label">precipitation</span>
             </div>
           </div>
           <p class="readout__desc"><?= e($weather['description']) ?></p>
@@ -99,23 +99,24 @@ function e(string $s): string
     </div>
   </section>
 
-  <section id="funkciok" class="features">
+  <section id="features" class="features">
     <div class="wrap">
       <div class="feature-grid">
         <article class="feature-card">
-          <p class="eyebrow">Magánszemélyeknek</p>
-          <h2>Tudd előre, mit hoz az idő</h2>
+          <p class="eyebrow">For individuals</p>
+          <h2>Know what's coming, before it arrives</h2>
           <p>
-            Fagy, hóvihar, erős szél — a SmartRelay figyeli a Gyergyó körüli
-            időjárást, és azonnal szól, ha változik valami, amire reagálnod kell.
+            Frost, storms, high winds — SmartRelay watches local conditions
+            and tells you right away when something changes that you need
+            to react to.
           </p>
         </article>
         <article class="feature-card">
-          <p class="eyebrow">Kis üzemeknek</p>
-          <h2>Ne maradjon el egy szervizdátum sem</h2>
+          <p class="eyebrow">For small operations</p>
+          <h2>Never miss a service date again</h2>
           <p>
-            A berendezéseid karbantartási határidőit a SmartRelay tartja számon,
-            és emlékeztet, mielőtt lejárna valami.
+            SmartRelay tracks your equipment's maintenance schedule and
+            reminds you before anything falls overdue.
           </p>
         </article>
       </div>
@@ -124,19 +125,19 @@ function e(string $s): string
 
   <section class="how">
     <div class="wrap">
-      <h2 class="how__title">Hogyan működik</h2>
+      <h2 class="how__title">How it works</h2>
       <ol class="how__steps">
         <li>
           <span class="how__num">1</span>
-          <span class="how__text">Csatlakozol a Telegram csatornához</span>
+          <span class="how__text">You join the Telegram channel</span>
         </li>
         <li>
           <span class="how__num">2</span>
-          <span class="how__text">A SmartRelay minden reggel figyeli az adatokat</span>
+          <span class="how__text">SmartRelay checks the data every morning</span>
         </li>
         <li>
           <span class="how__num">3</span>
-          <span class="how__text">Csak akkor kapsz üzenetet, ha tényleg számít</span>
+          <span class="how__text">You only get a message when it actually counts</span>
         </li>
       </ol>
     </div>
@@ -146,8 +147,8 @@ function e(string $s): string
 
 <footer class="site-footer">
   <div class="wrap site-footer__inner">
-    <p>SmartRelay — Gyergyócsomafalva, Harghita megye</p>
-    <a href="<?= e($channelUrl) ?>">Telegram csatorna →</a>
+    <p>SmartRelay — live signal relay platform</p>
+    <a href="<?= e($channelUrl) ?>">Telegram channel →</a>
   </div>
 </footer>
 

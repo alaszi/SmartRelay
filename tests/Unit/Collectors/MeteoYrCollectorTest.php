@@ -24,7 +24,7 @@ class MeteoYrCollectorTest extends TestCase
     public function testGetNameContainsLocation(): void
     {
         $this->assertStringContainsString('yr.no', $this->collector->getName());
-        $this->assertStringContainsString('Gyergyó', $this->collector->getName());
+        $this->assertStringContainsString('Weather', $this->collector->getName());
     }
 
     public function testParseExtractsTemperature(): void
@@ -61,7 +61,7 @@ class MeteoYrCollectorTest extends TestCase
 
     public function testFeelsLikeCoolerInWind(): void
     {
-        // Hideg hőmérséklet + erős szél → érzett hőmérséklet alacsonyabb
+        // Cold temperature + strong wind -> lower feels-like temperature
         $rawCold  = $this->makeFakeApiResponse(temp: -5.0, wind: 10.0, precip: 0.0);
         $rawWarm  = $this->makeFakeApiResponse(temp: -5.0, wind: 0.0, precip: 0.0);
 
@@ -71,16 +71,16 @@ class MeteoYrCollectorTest extends TestCase
         $this->assertLessThan(
             $parsedWarm['current']['feels_like'],
             $parsedCold['current']['feels_like'],
-            'Erős szélben az érzett hőmérsékletnek alacsonyabbnak kell lennie'
+            'In strong wind, the feels-like temperature should be lower'
         );
     }
 
-    public function testParseDescriptionInHungarian(): void
+    public function testParseDescriptionInEnglish(): void
     {
         $raw    = $this->makeFakeApiResponse(temp: 0.0, wind: 2.0, precip: 3.0, symbol: 'snow_day');
         $parsed = $this->collector->parse($raw);
 
-        $this->assertSame('Havazás', $parsed['current']['description']);
+        $this->assertSame('Snow', $parsed['current']['description']);
     }
 
     public function testParseForecastDataExists(): void
@@ -119,7 +119,7 @@ class MeteoYrCollectorTest extends TestCase
             ],
         ];
 
-        // 13 azonos bejegyzés (6h és 12h előrejelzéshez is legyen adat)
+        // 13 identical entries (so 6h and 12h forecast indices also have data)
         return [
             'properties' => [
                 'timeseries' => array_fill(0, 13, $entry),

@@ -130,20 +130,20 @@ class MaintenanceService implements ServiceInterface
         $sent = 0;
 
         if (!empty($overdue)) {
-            $body = "Az alábbi karbantartási feladatok késedelemben vannak:\n\n";
+            $body = "The following maintenance tasks are overdue:\n\n";
             foreach ($overdue as $task) {
-                $body .= "• *{$task['equipment_name']}* — {$task['name']}: {$task['days_overdue']} napja lejárt\n";
+                $body .= "• *{$task['equipment_name']}* — {$task['name']}: {$task['days_overdue']} day(s) overdue\n";
             }
-            $sent += $this->notify('⚠️ Késedelmes karbantartás', $body, 'warning');
+            $sent += $this->notify('⚠️ Overdue maintenance', $body, 'warning');
         }
 
         if (!empty($due)) {
-            $body = "Az alábbi karbantartási feladatok hamarosan esedékesek:\n\n";
+            $body = "The following maintenance tasks are coming up soon:\n\n";
             foreach ($due as $task) {
-                $days = $task['days_until_due'] === 0 ? 'MA esedékes' : "{$task['days_until_due']} nap múlva";
+                $days = $task['days_until_due'] === 0 ? 'due TODAY' : "due in {$task['days_until_due']} day(s)";
                 $body .= "• *{$task['equipment_name']}* — {$task['name']}: {$days}\n";
             }
-            $sent += $this->notify('📋 Közelgő karbantartás', $body, 'info');
+            $sent += $this->notify('📋 Upcoming maintenance', $body, 'info');
         }
 
         return $sent;

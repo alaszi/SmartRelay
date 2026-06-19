@@ -20,7 +20,7 @@ class LandingPageDataTest extends TestCase
 
         $this->assertFalse($snapshot['available']);
         $this->assertSame('—', $snapshot['temperature']);
-        $this->assertSame('Élő adat hamarosan', $snapshot['description']);
+        $this->assertSame('Live data coming soon', $snapshot['description']);
     }
 
     public function testReturnsEmptySnapshotWhenStatusIsError(): void
@@ -56,7 +56,7 @@ class LandingPageDataTest extends TestCase
         $collector->method('isAvailable')->willReturn(true);
         $collector->method('collect')->willReturn([
             'status'       => 'ok',
-            'location'     => 'Gyergyócsomafalva',
+            'location'     => 'Default Location',
             'collected_at' => '2026-06-19 06:30:00',
             'parsed'       => [
                 'current' => [
@@ -64,7 +64,7 @@ class LandingPageDataTest extends TestCase
                     'wind_speed'    => 2.1,
                     'humidity'      => 70,
                     'precipitation' => 0.0,
-                    'description'   => 'Derült',
+                    'description'   => 'Clear sky',
                 ],
             ],
         ]);
@@ -75,7 +75,7 @@ class LandingPageDataTest extends TestCase
         $this->assertTrue($snapshot['available']);
         $this->assertSame('8.5°C', $snapshot['temperature']);
         $this->assertSame('2.1 m/s', $snapshot['wind']);
-        $this->assertSame('Derült', $snapshot['description']);
+        $this->assertSame('Clear sky', $snapshot['description']);
         $this->assertSame('06:30', $snapshot['updated_at']);
     }
 

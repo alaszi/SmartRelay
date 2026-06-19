@@ -8,25 +8,27 @@ use SmartRelay\Core\Config;
 use SmartRelay\Core\Logger;
 
 /**
- * Időjárás adatgyűjtő — yr.no / api.met.no
+ * Weather data collector — yr.no / api.met.no
  *
- * Ingyenes, regisztráció nélküli norvég meteorológiai API.
- * Dokumentáció: https://api.met.no/weatherapi/locationforecast/2.0/
+ * Free, registration-free Norwegian meteorological API.
+ * Docs: https://api.met.no/weatherapi/locationforecast/2.0/
  *
- * Alapértelmezett helyszín: Gyergyócsomafalva (Ciumani), Harghita megye
- * Konfigurálható: METEO_LAT, METEO_LON, METEO_ALTITUDE, METEO_LOCATION_NAME
+ * Works for any location worldwide — fully driven by configuration.
+ * Default location is provided only as a convenience fallback when
+ * no configuration is set; it carries no special meaning in the code.
+ * Configure via: METEO_LAT, METEO_LON, METEO_ALTITUDE, METEO_LOCATION_NAME
  */
 class MeteoYrCollector implements CollectorInterface
 {
-    private const API_URL  = 'https://api.met.no/weatherapi/locationforecast/2.0/compact';
-    private const TIMEOUT  = 15;
-    private const CACHE_TTL = 1800; // 30 perc — yr.no ezt kéri
+    private const API_URL   = 'https://api.met.no/weatherapi/locationforecast/2.0/compact';
+    private const TIMEOUT   = 15;
+    private const CACHE_TTL = 1800; // 30 minutes — required by yr.no's terms of use
 
-    // Gyergyócsomafalva alapértelmezett koordináták
+    // Convenience default — overridden entirely by config in any real deployment
     private const DEFAULT_LAT      = 46.783;
     private const DEFAULT_LON      = 25.633;
     private const DEFAULT_ALTITUDE = 860;
-    private const DEFAULT_NAME     = 'Gyergyócsomafalva';
+    private const DEFAULT_NAME     = 'Default Location';
 
     private Logger $logger;
 
@@ -42,19 +44,19 @@ class MeteoYrCollector implements CollectorInterface
 
     public function getName(): string
     {
-        return 'Időjárás — yr.no (' . $this->getLocationName() . ')';
+        return 'Weather — yr.no (' . $this->getLocationName() . ')';
     }
 
     public function isAvailable(): bool
     {
-        // Cache fájl ellenőrzés — ha friss (< 30 perc), ne hívjuk újra az API-t
+        // Cache check — if fresh (< 30 min), skip calling the API again
         $cache = $this->getCachePath();
         if (file_exists($cache) && (time() - filemtime($cache)) < self::CACHE_TTL) {
-            $this->logger->debug('Cache hit, API hívás kihagyva');
+            $this->logger->debug('Cache hit, skipping API call');
             return true;
         }
 
-        // Egyszerű kapcsolat ellenőrzés
+        // Simple connectivity check
         $ch = curl_init(self::API_URL . '?lat=' . $this->getLat() . '&lon=' . $this->getLon());
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
@@ -71,16 +73,16 @@ class MeteoYrCollector implements CollectorInterface
 
     public function collect(): array
     {
-        $this->logger->info('Időjárás adatgyűjtés indítása', [
-            'helyszín' => $this->getLocationName(),
+        $this->logger->info('Starting weather collection', [
+            'location' => $this->getLocationName(),
             'lat'      => $this->getLat(),
             'lon'      => $this->getLon(),
         ]);
 
-        // Cache-ből olvasunk ha friss
+        // Serve from cache if fresh
         $cached = $this->fromCache();
         if ($cached !== null) {
-            $this->logger->debug('Cache-ből visszaadva');
+            $this->logger->debug('Returned from cache');
             return $cached;
         }
 
@@ -91,7 +93,7 @@ class MeteoYrCollector implements CollectorInterface
                 'collected_at' => date('Y-m-d H:i:s'),
                 'source'       => $this->getId(),
                 'status'       => 'error',
-                'error'        => 'API hívás sikertelen',
+                'error'        => 'API request failed',
                 'raw'          => null,
                 'parsed'       => null,
             ];
@@ -110,16 +112,16 @@ class MeteoYrCollector implements CollectorInterface
 
         $this->toCache($result);
 
-        $this->logger->info('Időjárás adatok összegyűjtve', [
-            'hőmérséklet' => $parsed['current']['temperature'] . '°C',
-            'szél'        => $parsed['current']['wind_speed'] . ' m/s',
+        $this->logger->info('Weather data collected', [
+            'temperature' => $parsed['current']['temperature'] . '°C',
+            'wind'        => $parsed['current']['wind_speed'] . ' m/s',
         ]);
 
         return $result;
     }
 
     /**
-     * Nyers API adat értelmezése — csak a releváns mezőket vesszük ki.
+     * Parse raw API data — extract only the fields we actually use.
      */
     public function parse(array $raw): array
     {
@@ -129,12 +131,12 @@ class MeteoYrCollector implements CollectorInterface
             return ['current' => [], 'forecast_6h' => [], 'forecast_12h' => []];
         }
 
-        // Jelenlegi adatok (első időpont)
-        $current     = $timeseries[0]['data']['instant']['details'] ?? [];
-        $next1h      = $timeseries[0]['data']['next_1_hours']['details'] ?? [];
-        $symbol      = $timeseries[0]['data']['next_1_hours']['summary']['symbol_code'] ?? 'unknown';
+        // Current conditions (first timestamp)
+        $current = $timeseries[0]['data']['instant']['details'] ?? [];
+        $next1h  = $timeseries[0]['data']['next_1_hours']['details'] ?? [];
+        $symbol  = $timeseries[0]['data']['next_1_hours']['summary']['symbol_code'] ?? 'unknown';
 
-        // ~6 és ~12 óra múlva (indexek közelítőleg)
+        // Roughly 6h and 12h ahead (approximate indices)
         $idx6h  = min(6, count($timeseries) - 1);
         $idx12h = min(12, count($timeseries) - 1);
 
@@ -151,7 +153,7 @@ class MeteoYrCollector implements CollectorInterface
                 'pressure'       => round((float)($current['air_pressure_at_sea_level'] ?? 0)),
                 'precipitation'  => round((float)($next1h['precipitation_amount'] ?? 0), 1),
                 'symbol'         => $symbol,
-                'description'    => $this->symbolToHu($symbol),
+                'description'    => $this->symbolToText($symbol),
             ],
             'forecast_6h'  => $this->extractForecast($timeseries[$idx6h] ?? []),
             'forecast_12h' => $this->extractForecast($timeseries[$idx12h] ?? []),
@@ -187,18 +189,18 @@ class MeteoYrCollector implements CollectorInterface
         curl_close($ch);
 
         if ($error) {
-            $this->logger->error('cURL hiba', ['error' => $error]);
+            $this->logger->error('cURL error', ['error' => $error]);
             return null;
         }
 
         if ($httpCode !== 200) {
-            $this->logger->error('API hiba', ['http_code' => $httpCode]);
+            $this->logger->error('API error', ['http_code' => $httpCode]);
             return null;
         }
 
         $data = json_decode($response, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
-            $this->logger->error('JSON parse hiba', ['error' => json_last_error_msg()]);
+            $this->logger->error('JSON parse error', ['error' => json_last_error_msg()]);
             return null;
         }
 
@@ -217,11 +219,11 @@ class MeteoYrCollector implements CollectorInterface
             'temperature' => round((float)($details['air_temperature'] ?? 0), 1),
             'wind_speed'  => round((float)($details['wind_speed'] ?? 0), 1),
             'symbol'      => $symbol,
-            'description' => $this->symbolToHu($symbol),
+            'description' => $this->symbolToText($symbol),
         ];
     }
 
-    /** Szélhűtési index (wind chill) számítása */
+    /** Wind chill calculation */
     private function feelsLike(float $temp, float $windMs): float
     {
         if ($temp > 10 || $windMs < 1.3) {
@@ -232,34 +234,34 @@ class MeteoYrCollector implements CollectorInterface
         return round($wc, 1);
     }
 
-    private function symbolToHu(string $symbol): string
+    private function symbolToText(string $symbol): string
     {
         $map = [
-            'clearsky'           => 'Derült',
-            'fair'               => 'Szinte derült',
-            'partlycloudy'       => 'Részben felhős',
-            'cloudy'             => 'Felhős',
-            'fog'                => 'Köd',
-            'lightrain'          => 'Gyenge eső',
-            'rain'               => 'Eső',
-            'heavyrain'          => 'Erős eső',
-            'lightsleet'         => 'Gyenge havas eső',
-            'sleet'              => 'Havas eső',
-            'heavysleet'         => 'Erős havas eső',
-            'lightsnow'          => 'Gyenge havazás',
-            'snow'               => 'Havazás',
-            'heavysnow'          => 'Erős havazás',
-            'lightrainshowers'   => 'Gyenge záporok',
-            'rainshowers'        => 'Záporok',
-            'heavyrainshowers'   => 'Erős záporok',
-            'lightsnowshowers'   => 'Gyenge hózáporok',
-            'snowshowers'        => 'Hózáporok',
-            'thunder'            => 'Zivatar',
-            'rainandthunder'     => 'Esőzivatar',
-            'snowandthunder'     => 'Hózivatar',
+            'clearsky'         => 'Clear sky',
+            'fair'              => 'Mostly clear',
+            'partlycloudy'      => 'Partly cloudy',
+            'cloudy'            => 'Cloudy',
+            'fog'               => 'Fog',
+            'lightrain'         => 'Light rain',
+            'rain'              => 'Rain',
+            'heavyrain'         => 'Heavy rain',
+            'lightsleet'        => 'Light sleet',
+            'sleet'             => 'Sleet',
+            'heavysleet'        => 'Heavy sleet',
+            'lightsnow'         => 'Light snow',
+            'snow'              => 'Snow',
+            'heavysnow'         => 'Heavy snow',
+            'lightrainshowers'  => 'Light rain showers',
+            'rainshowers'       => 'Rain showers',
+            'heavyrainshowers'  => 'Heavy rain showers',
+            'lightsnowshowers'  => 'Light snow showers',
+            'snowshowers'       => 'Snow showers',
+            'thunder'           => 'Thunderstorm',
+            'rainandthunder'    => 'Rain and thunder',
+            'snowandthunder'    => 'Snow and thunder',
         ];
 
-        // Levágja a nappali/éjjeli utótagot (_day, _night, _polartwilight)
+        // Strip the day/night/polar-twilight suffix (_day, _night, _polartwilight)
         $base = preg_replace('/_(?:day|night|polartwilight)$/', '', $symbol);
         return $map[$base] ?? ucfirst(str_replace('_', ' ', $base));
     }

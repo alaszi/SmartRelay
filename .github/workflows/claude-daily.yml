@@ -1,37 +1,37 @@
-name: Claude Napi Automatizálás
+name: Claude Daily Automation
 
 on:
   schedule:
-    - cron: '0 1 * * *'   # 03:00 román idő (UTC+2)
-  workflow_dispatch:        # kézzel is indítható
+    - cron: '0 1 * * *'   # 03:00 Romania time (UTC+2/UTC+3 DST)
+  workflow_dispatch:        # can also be triggered manually
 
 jobs:
 
-  # ─── 1. TESZTEK FUTTATÁSA (kapu a fejlesztés előtt) ──────────────────────
+  # ─── 1. RUN TESTS (gate before any development happens) ──────────────────
   test:
-    name: Unit tesztek
+    name: Unit tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: PHP beállítás
+      - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.1'
           extensions: curl, json, pdo
           coverage: none
 
-      - name: Composer függőségek telepítése
+      - name: Install Composer dependencies
         run: composer install --no-interaction --prefer-dist
 
-      - name: Unit tesztek futtatása
+      - name: Run unit tests
         run: composer test
 
-  # ─── 2. CLAUDE FEJLESZT (csak ha a tesztek zöldek) ───────────────────────
+  # ─── 2. CLAUDE DEVELOPS (only if tests are green) ─────────────────────────
   daily-improvement:
-    name: Claude napi fejlesztés
+    name: Claude daily development
     runs-on: ubuntu-latest
-    needs: test           # csak zöld tesztek után fut!
+    needs: test           # only runs after green tests!
     permissions:
       contents: write
       pull-requests: write
@@ -40,53 +40,58 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: PHP beállítás
+      - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.1'
           extensions: curl, json, pdo
           coverage: none
 
-      - name: Composer függőségek telepítése
+      - name: Install Composer dependencies
         run: composer install --no-interaction --prefer-dist
 
       - uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
-            Olvasd el a CLAUDE.md fájlt — ez az elsődleges munkautasítás.
+            Read CLAUDE.md — it is the primary working instruction.
 
-            KÖTELEZŐ LÉPÉSEK SORRENDBEN:
-            1. Futtasd: composer test
-               - Ha bármely teszt eltört, először azt javítsd
-               - Ne folytasd amíg minden teszt zöld nem lesz
+            MANDATORY STEPS IN ORDER:
+            1. Run: composer test
+               - If any test is failing, fix that first
+               - Do not continue until everything is green
 
-            2. Peer review — ellenőrizd:
-               - Van-e TODO komment éles kódban?
-               - Van-e hardcoded kulcs vagy jelszó?
-               - Minden publikus metódushoz van-e teszt?
+            2. Peer review — check:
+               - Any TODO comments in production code?
+               - Any hardcoded keys or passwords?
+               - Does every public method have a test?
+               - Any hardcoded locality assumptions in shared code?
 
-            3. Végezd el a napi fejlesztési feladatokat (CLAUDE.md alapján):
-               - Ellenőrizd az adatforrások elérhetőségét
-               - Javítsd az eltört parsereket (unit teszttel együtt)
-               - Generáld/frissítsd a riasztás tartalmakat
+            3. Do today's work (per CLAUDE.md):
+               - Check data source availability
+               - Fix any broken parsers (with accompanying tests)
+               - Generate/update alert content as needed
+               - Per the Daily growth directive: look for one small,
+                 well-scoped, additive enhancement (new collector, new
+                 notifier, small CMMS feature, or generalizing something
+                 that's currently too specific to one deployment)
 
-            4. Mielőtt commitolsz: futtasd újra: composer test
-               - Ha nem zöld: javítsd, csak akkor commitolj
+            4. Before committing: run composer test again
+               - Only commit if everything is green
 
-            5. Írj összefoglalót mit csináltál (GitHub Actions log-ba)
+            5. Write a summary of what was done (GitHub Actions log)
 
-            TILOS:
-            - Failing tesztekkel commitolni
-            - Hardcoded értékeket beírni
-            - Interfész módosítást PR nélkül merge-elni
-            - Deployment szkriptet módosítani
+            NEVER:
+            - Commit with failing tests
+            - Hardcode values that should be configuration
+            - Merge an interface change without a PR
+            - Modify the deployment script
 
-  # ─── 3. DEPLOY (csak ha mindkét előző lépés sikeres) ─────────────────────
+  # ─── 3. DEPLOY (only if both previous steps succeeded) ────────────────────
   deploy:
-    name: Deploy smartrelay.ro-ra
+    name: Deploy to smartrelay.ro
     runs-on: ubuntu-latest
-    needs: [test, daily-improvement]   # MINDKETTŐ kell!
+    needs: [test, daily-improvement]   # BOTH required!
     if: github.ref == 'refs/heads/main'
     steps:
       - name: SSH deploy
@@ -96,7 +101,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            set -e   # bármely hiba leállítja a deployt
+            set -e   # any error stops the deploy
 
             cd /var/www/smartrelay.ro/SmartRelay
 
@@ -106,8 +111,8 @@ jobs:
             echo "=== Composer install ==="
             composer install --no-interaction --prefer-dist --no-dev
 
-            echo "=== Jogosultságok ==="
+            echo "=== Permissions ==="
             mkdir -p logs
             chmod 755 logs
 
-            echo "✅ Deploy kész: $(date '+%Y-%m-%d %H:%M:%S')"
+            echo "✅ Deploy complete: $(date '+%Y-%m-%d %H:%M:%S')"

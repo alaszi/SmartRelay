@@ -1,20 +1,20 @@
 [
     {
         "id": "example_machine_01",
-        "name": "Példa gép #1",
-        "location": "Raktár A",
+        "name": "Example Machine #1",
+        "location": "Warehouse A",
         "tasks": [
             {
-                "name": "Olajcsere",
+                "name": "Oil change",
                 "interval_days": 90,
                 "next_due": "2026-07-01",
-                "responsible": "Kovács János"
+                "responsible": "Jane Doe"
             },
             {
-                "name": "Szűrő ellenőrzés",
+                "name": "Filter inspection",
                 "interval_days": 30,
                 "next_due": "2026-06-25",
-                "responsible": "Kovács János"
+                "responsible": "Jane Doe"
             }
         ]
     }
