@@ -105,8 +105,9 @@ jobs:
 
             cd /var/www/smartrelay.ro/SmartRelay
 
-            echo "=== Git pull ==="
-            git pull origin main
+            echo "=== Git fetch + hard reset to origin/main ==="
+            git fetch origin main
+            git reset --hard origin/main
 
             echo "=== Composer install ==="
             composer install --no-interaction --prefer-dist --no-dev
