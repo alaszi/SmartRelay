@@ -1,22 +1,22 @@
-name: Deploy to Live Server via FTP
+name: Deploy (manual)
 
+# Manual-only until the owner picks a production host (MASTER_PLAN D8). Pushing to main must
+# never deploy. Phase 6 replaces the placeholder step with the SSH deploy (deploy/deploy.sh).
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  web-deploy:
+  deploy:
     name: Deploy
     runs-on: ubuntu-latest
     steps:
       - name: Get latest code
         uses: actions/checkout@v4
 
-      - name: Sync files via FTP
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          server-dir: /public_html/
+      - name: No deployment target configured
+        run: |
+          echo "::error::No production host has been chosen yet. Nothing was deployed."
+          exit 1
