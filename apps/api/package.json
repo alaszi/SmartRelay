@@ -1,0 +1,14 @@
+{
+  "name": "@smartrelay/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsx watch --env-file-if-exists=../../.env src/main.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@smartrelay/shared": "workspace:*"
+  }
+}
