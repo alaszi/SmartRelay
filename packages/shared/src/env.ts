@@ -2,6 +2,32 @@ import { z } from 'zod';
 
 const BASE64_32_BYTES = /^[A-Za-z0-9+/]{43}=$/;
 
+/** Key ids appear in stored blobs (`keyId:iv:tag:ciphertext`), so they must never contain ':'. */
+export const ENCRYPTION_KEY_ID_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
+
+export interface PreviousEncryptionKey {
+  id: string;
+  /** 32 bytes, base64 encoded. */
+  key: string;
+}
+
+/**
+ * Parses ENCRYPTION_KEYS_PREVIOUS: comma separated `id:base64key` entries that stay valid for
+ * decryption after a key rotation. Returns null when the value is malformed.
+ */
+export function parsePreviousEncryptionKeys(raw: string): PreviousEncryptionKey[] | null {
+  const keys: PreviousEncryptionKey[] = [];
+  for (const entry of raw.split(',')) {
+    const separator = entry.indexOf(':');
+    if (separator === -1) return null;
+    const id = entry.slice(0, separator).trim();
+    const key = entry.slice(separator + 1).trim();
+    if (!ENCRYPTION_KEY_ID_PATTERN.test(id) || !BASE64_32_BYTES.test(key)) return null;
+    keys.push({ id, key });
+  }
+  return keys;
+}
+
 const optionalSecret = z.string().min(1).optional();
 
 const envSchema = z.object({
@@ -14,6 +40,17 @@ const envSchema = z.object({
   ENCRYPTION_KEY: z
     .string()
     .regex(BASE64_32_BYTES, 'must be 32 random bytes encoded as base64 (44 characters)'),
+  ENCRYPTION_KEY_ID: z
+    .string()
+    .regex(ENCRYPTION_KEY_ID_PATTERN, 'must be 1-32 characters of A-Z a-z 0-9 _ -')
+    .default('k1'),
+  ENCRYPTION_KEYS_PREVIOUS: z
+    .string()
+    .refine(
+      (value) => parsePreviousEncryptionKeys(value) !== null,
+      'must be comma separated "id:base64key" entries with 32-byte keys',
+    )
+    .optional(),
 
   STRIPE_SECRET_KEY: optionalSecret,
   STRIPE_WEBHOOK_SECRET: optionalSecret,
@@ -69,6 +106,17 @@ function crossFieldIssues(source: EnvSource): string[] {
 
   if (source['NODE_ENV'] === 'production') {
     for (const name of PRODUCTION_REQUIRED) need(name, 'in production');
+  }
+
+  const previousRaw = source['ENCRYPTION_KEYS_PREVIOUS'];
+  const previous = previousRaw === undefined ? null : parsePreviousEncryptionKeys(previousRaw);
+  if (previous) {
+    const ids = [source['ENCRYPTION_KEY_ID'] ?? 'k1', ...previous.map((entry) => entry.id)];
+    if (new Set(ids).size !== ids.length) {
+      issues.push(
+        'ENCRYPTION_KEYS_PREVIOUS: key ids must be unique and differ from ENCRYPTION_KEY_ID',
+      );
+    }
   }
   return issues;
 }

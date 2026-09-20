@@ -97,6 +97,53 @@ describe('loadEnv', () => {
     });
   });
 
+  describe('encryption key rotation settings', () => {
+    it('defaults the key id to k1 and previous keys to unset', () => {
+      const env = loadEnv(devEnv);
+      expect(env.ENCRYPTION_KEY_ID).toBe('k1');
+      expect(env.ENCRYPTION_KEYS_PREVIOUS).toBeUndefined();
+    });
+
+    it('accepts previous keys with distinct ids', () => {
+      const oldKey = randomBytes(32).toString('base64');
+      const env = loadEnv({
+        ...devEnv,
+        ENCRYPTION_KEY_ID: 'k2',
+        ENCRYPTION_KEYS_PREVIOUS: `k1:${oldKey}`,
+      });
+      expect(env.ENCRYPTION_KEY_ID).toBe('k2');
+    });
+
+    it('rejects a key id containing a colon', () => {
+      expect(issuesFor({ ...devEnv, ENCRYPTION_KEY_ID: 'a:b' })).toEqual([
+        expect.stringContaining('ENCRYPTION_KEY_ID'),
+      ]);
+    });
+
+    it('rejects malformed previous keys without echoing them', () => {
+      const secretLooking = 'k1:definitely-not-a-key-but-secret';
+      const issues = issuesFor({ ...devEnv, ENCRYPTION_KEYS_PREVIOUS: secretLooking });
+      expect(issues).toEqual([expect.stringContaining('ENCRYPTION_KEYS_PREVIOUS')]);
+      expect(issues.join('\n')).not.toContain('definitely-not-a-key');
+    });
+
+    it('rejects a previous key id that equals the current one or repeats', () => {
+      const oldKey = randomBytes(32).toString('base64');
+      const otherKey = randomBytes(32).toString('base64');
+
+      expect(issuesFor({ ...devEnv, ENCRYPTION_KEYS_PREVIOUS: `k1:${oldKey}` })).toEqual([
+        expect.stringContaining('unique'),
+      ]);
+      expect(
+        issuesFor({
+          ...devEnv,
+          ENCRYPTION_KEY_ID: 'k3',
+          ENCRYPTION_KEYS_PREVIOUS: `k1:${oldKey},k1:${otherKey}`,
+        }),
+      ).toEqual([expect.stringContaining('unique')]);
+    });
+  });
+
   describe('URL protocols', () => {
     it('rejects a non-postgres DATABASE_URL and a non-redis REDIS_URL', () => {
       const issues = issuesFor({
