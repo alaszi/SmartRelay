@@ -17,6 +17,21 @@ jobs:
     name: Typecheck, lint, test, build
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      # Integration tests create and use their own smartrelay_test database on this server.
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: smartrelay
+          POSTGRES_PASSWORD: smartrelay
+          POSTGRES_DB: smartrelay
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U smartrelay -d smartrelay"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     steps:
       - name: Get latest code
         uses: actions/checkout@v4

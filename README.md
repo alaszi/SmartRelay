@@ -27,5 +27,15 @@ Checks that must pass before every commit:
 pnpm typecheck && pnpm lint && pnpm test
 ```
 
+`pnpm test` includes integration tests that need the dev Postgres (`docker compose up -d --wait`).
+They create and use a separate `smartrelay_test` database, never the dev one.
+
+Database commands (need `DATABASE_URL`, read from `.env`):
+
+```bash
+pnpm db:migrate   # apply migrations
+pnpm db:seed      # seed default prices (existing prices are never overwritten)
+```
+
 The full README (env reference, Stripe/Google/inbound-email setup, backups, runbook) is written in
 Phase 6.
