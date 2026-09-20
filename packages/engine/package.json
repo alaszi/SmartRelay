@@ -8,5 +8,11 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@smartrelay/shared": "workspace:*",
+    "jsonpath-plus": "10.4.0",
+    "libphonenumber-js": "1.13.13",
+    "zod": "4.6.5"
   }
 }
