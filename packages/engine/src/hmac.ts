@@ -10,7 +10,12 @@ export interface HmacSpec {
   encoding: HmacEncoding;
 }
 
-/** Presets from the plan (section 6, Module 1): HMAC of the raw body, keyed with the shared secret. */
+/**
+ * Presets from the plan (section 6, Module 1): HMAC of the raw body, keyed with the shared secret.
+ * Shopify (header, HMAC-SHA256, base64, raw body) was checked against shopify.dev.
+ * TODO(verify-docs): the WooCommerce values come from the plan; its official docs were not
+ * reachable to confirm the header name, algorithm and encoding.
+ */
 export const HMAC_PRESETS = {
   woocommerce: { header: 'x-wc-webhook-signature', algorithm: 'sha256', encoding: 'base64' },
   shopify: { header: 'x-shopify-hmac-sha256', algorithm: 'sha256', encoding: 'base64' },
