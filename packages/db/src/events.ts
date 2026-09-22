@@ -2,10 +2,11 @@ import { and, asc, desc, eq, gt, isNotNull, lt, sql } from 'drizzle-orm';
 import type { EventSource, EventStatus } from '@smartrelay/shared';
 import type { Db, Executor } from './client';
 import { clearNotification } from './notifications';
-import { deliveryAttempts, eventPayloads, events } from './schema';
+import { deliveryAttempts, eventPayloads, events, relays } from './schema';
 
 export type EventRow = typeof events.$inferSelect;
 export type DeliveryAttemptRow = typeof deliveryAttempts.$inferSelect;
+export type EventPayloadRow = typeof eventPayloads.$inferSelect;
 
 const PAYLOAD_RETENTION_MS = 30 * 24 * 3600 * 1000;
 
@@ -77,6 +78,74 @@ export async function getEventPayloadIn(db: Executor, eventId: string): Promise<
     .where(eq(eventPayloads.eventId, eventId))
     .limit(1);
   return row?.payloadIn;
+}
+
+/** Undefined once purged (MASTER_PLAN section 7, 30-day GDPR retention): the Logs UI shows
+ * "Payload deleted" in that case rather than treating it as an error. */
+export async function getEventPayloadRow(
+  db: Executor,
+  eventId: string,
+): Promise<EventPayloadRow | undefined> {
+  const [row] = await db
+    .select()
+    .from(eventPayloads)
+    .where(eq(eventPayloads.eventId, eventId))
+    .limit(1);
+  return row;
+}
+
+export async function listDeliveryAttempts(
+  db: Executor,
+  eventId: string,
+): Promise<DeliveryAttemptRow[]> {
+  return db
+    .select()
+    .from(deliveryAttempts)
+    .where(eq(deliveryAttempts.eventId, eventId))
+    .orderBy(asc(deliveryAttempts.attemptNo));
+}
+
+export interface EventListItem extends EventRow {
+  relayName: string;
+}
+
+export interface ListEventsFilter {
+  relayId?: string;
+  status?: EventStatus;
+  /** ISO `receivedAt` of the last item from the previous page. */
+  cursor?: string;
+  /** Default 25. */
+  limit?: number;
+}
+
+/** The Logs screen's `GET /api/logs` (MASTER_PLAN section 9): newest-first, cursor-paginated
+ * across every relay the user owns, each row carrying its relay's name for display. */
+export async function listEventsForUser(
+  db: Executor,
+  userId: string,
+  filter: ListEventsFilter = {},
+): Promise<{ events: EventListItem[]; nextCursor: string | null }> {
+  const limit = filter.limit ?? 25;
+  const conditions = [eq(events.userId, userId)];
+  if (filter.relayId) conditions.push(eq(events.relayId, filter.relayId));
+  if (filter.status) conditions.push(eq(events.status, filter.status));
+  if (filter.cursor) conditions.push(lt(events.receivedAt, new Date(filter.cursor)));
+
+  const rows = await db
+    .select({ event: events, relayName: relays.name })
+    .from(events)
+    .innerJoin(relays, eq(relays.id, events.relayId))
+    .where(and(...conditions))
+    .orderBy(desc(events.receivedAt))
+    .limit(limit + 1);
+
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const last = page[page.length - 1];
+  return {
+    events: page.map((r) => ({ ...r.event, relayName: r.relayName })),
+    nextCursor: hasMore && last ? last.event.receivedAt.toISOString() : null,
+  };
 }
 
 /** 24 h dedupe per relay for the optional `Idempotency-Key` ingest header. */

@@ -11,7 +11,14 @@ export const MAX_RELAYS_PER_ACCOUNT = 25;
 export const createRelayInputSchema = z.object({
   name: z.string().trim().min(1).max(100),
   type: relayTypeSchema,
-  configPublic: z.record(z.string(), z.unknown()).default({}),
+  /**
+   * No default: omitting this entirely (vs. passing `{}`) is what lets the web wizard create a
+   * relay right after step 1 (name + type), before its destination config exists, so step 2 can
+   * show the generated trigger URL/address while step 3 is still being filled in. The API only
+   * validates a config against the module's own schema when the caller actually supplies one
+   * (see apps/api/src/routes/relays.ts's assertValidModuleConfig).
+   */
+  configPublic: z.record(z.string(), z.unknown()).optional(),
   /** Plaintext on input only; the API encrypts it and never returns it. */
   configSecret: z.record(z.string(), z.unknown()).optional(),
 });

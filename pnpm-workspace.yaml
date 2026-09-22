@@ -5,8 +5,18 @@ packages:
 # No dependency may run install scripts (MASTER_PLAN section 8.8). esbuild ships prebuilt
 # binaries through optional dependencies and does not need its postinstall step.
 allowBuilds:
+  # Next.js's file watcher (dev mode) and its SWC compiler; both ship prebuilt native binaries with
+  # no pure-JS fallback, so the postinstall step that unpacks them is required.
+  '@parcel/watcher': true
+  '@swc/core': true
   esbuild: false
   # msgpackr's native accelerator; msgpackr has a pure-JS fallback so the build is unnecessary.
   msgpackr-extract: false
   # msw's postinstall only sets up its browser Service Worker file; we only use msw/node.
   msw: false
+
+minimumReleaseAgeExclude:
+  - icu-minify@4.14.6
+  - next-intl-swc-plugin-extractor@4.14.6
+  - next-intl@4.14.6
+  - use-intl@4.14.6

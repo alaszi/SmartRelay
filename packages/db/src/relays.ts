@@ -7,8 +7,9 @@ import type { Db, Executor } from './client';
 import { relayEmailAddresses, relays } from './schema';
 
 export type RelayRow = typeof relays.$inferSelect;
-/** Relay row with `configSecret` always stripped: the API never returns it (write-only). */
-export type RelayPublicRow = Omit<RelayRow, 'configSecret'>;
+/** Relay row with `configSecret` always stripped: the API never returns it (write-only). The web
+ * UI's SecretInput still needs to know whether one is already stored, without its content. */
+export type RelayPublicRow = Omit<RelayRow, 'configSecret'> & { hasSecret: boolean };
 
 export type RelayErrorCode = 'LIMIT_REACHED' | 'NOT_FOUND';
 
@@ -23,8 +24,8 @@ export class RelayError extends Error {
 }
 
 function toPublic(row: RelayRow): RelayPublicRow {
-  const { configSecret: _configSecret, ...rest } = row;
-  return rest;
+  const { configSecret, ...rest } = row;
+  return { ...rest, hasSecret: configSecret !== null };
 }
 
 /** 24 random bytes -> 32 base64url characters, meeting the "32+ chars" requirement. */
@@ -170,26 +171,55 @@ export interface RelayUpdateInput {
 }
 
 export async function updateRelay(
-  db: Executor,
+  db: Db,
   keyring: Keyring,
   userId: string,
   id: string,
   input: RelayUpdateInput,
 ): Promise<RelayPublicRow> {
-  const set: Partial<typeof relays.$inferInsert> = {};
-  if (input.name !== undefined) set.name = input.name;
-  if (input.status !== undefined) set.status = input.status;
-  if (input.configPublic !== undefined) set.configPublic = input.configPublic;
-  if (input.configSecret !== undefined)
-    set.configSecret = encryptSecret(keyring, id, input.configSecret);
+  return db.transaction(async (tx) => {
+    const set: Partial<typeof relays.$inferInsert> = {};
+    if (input.name !== undefined) set.name = input.name;
+    if (input.status !== undefined) set.status = input.status;
+    if (input.configPublic !== undefined) set.configPublic = input.configPublic;
 
-  const [row] = await db
-    .update(relays)
-    .set(set)
-    .where(and(eq(relays.id, id), eq(relays.userId, userId)))
-    .returning();
-  if (!row) throw new RelayError('NOT_FOUND', 'Relay not found');
-  return toPublic(row);
+    if (input.configPublic !== undefined || input.configSecret !== undefined) {
+      const [existing] = await tx.select().from(relays).where(eq(relays.id, id)).limit(1);
+      const existingSecret =
+        existing?.configSecret !== null && existing?.configSecret !== undefined
+          ? decryptRelaySecret(keyring, existing)
+          : {};
+
+      // A "Replace" in the UI only ever supplies the one secret field being changed (secrets are
+      // write-only, MASTER_PLAN section 8.1: the client cannot know the others' current values),
+      // so this merges onto what is already stored instead of overwriting the whole blob.
+      let nextSecret = input.configSecret
+        ? { ...existingSecret, ...input.configSecret }
+        : undefined;
+
+      // The web wizard creates a relay at step 1 (name + type only) and fills in its destination
+      // config later via this same update path, so a telegram chat_relay may only turn into one
+      // here rather than at createRelay() — mirror that function's auto-provisioning of the
+      // callback secret so it is never missing just because of when the config arrived.
+      const platform = (input.configPublic ?? existing?.configPublic)?.['platform'];
+      if (existing?.type === 'chat_relay' && platform === 'telegram') {
+        const merged = nextSecret ?? existingSecret;
+        if (typeof merged['tgCallbackSecret'] !== 'string') {
+          nextSecret = { ...merged, tgCallbackSecret: generateTelegramCallbackSecret() };
+        }
+      }
+
+      if (nextSecret !== undefined) set.configSecret = encryptSecret(keyring, id, nextSecret);
+    }
+
+    const [row] = await tx
+      .update(relays)
+      .set(set)
+      .where(and(eq(relays.id, id), eq(relays.userId, userId)))
+      .returning();
+    if (!row) throw new RelayError('NOT_FOUND', 'Relay not found');
+    return toPublic(row);
+  });
 }
 
 export async function rotateIngestToken(

@@ -15,9 +15,11 @@ import { requireSameOrigin } from './csrf';
 import { HttpError } from './http-error';
 import { createLogger } from './logger';
 import { registerAuthRoutes } from './routes/auth';
+import { registerBillingRoutes } from './routes/billing';
 import { registerHealthRoutes } from './routes/health';
 import { registerInboundEmailRoutes } from './routes/inbound-email';
 import { registerIngestRoutes } from './routes/ingest';
+import { registerLogsRoutes } from './routes/logs';
 import { registerRelayRoutes } from './routes/relays';
 import { registerTelegramCallbackRoutes } from './routes/telegram-callback';
 
@@ -133,6 +135,8 @@ export function buildApp(ctx: AppContext): App {
     registerHealthRoutes(instance);
     registerAuthRoutes(instance, ctx, { secureCookies, sameOrigin });
     registerRelayRoutes(instance, ctx, { sameOrigin });
+    registerBillingRoutes(instance, ctx, { sameOrigin });
+    registerLogsRoutes(instance, ctx);
     registerIngestRoutes(instance, ctx);
     registerInboundEmailRoutes(instance, ctx);
     registerTelegramCallbackRoutes(instance, ctx);

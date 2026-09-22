@@ -6,3 +6,5 @@ pnpm-lock.yaml
 MASTER_PLAN.md
 CLAUDE.md
 packages/db/drizzle
+# Next.js manages this file's content; it is re-synced by Next itself, not us.
+apps/web/next-env.d.ts
