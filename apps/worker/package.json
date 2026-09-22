@@ -9,6 +9,16 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@smartrelay/shared": "workspace:*"
+    "@smartrelay/db": "workspace:*",
+    "@smartrelay/engine": "workspace:*",
+    "@smartrelay/shared": "workspace:*",
+    "bullmq": "6.3.8",
+    "ioredis": "6.0.0",
+    "nodemailer": "^7.0.13",
+    "pino": "10.3.1",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/nodemailer": "^8.0.2"
   }
 }

@@ -57,6 +57,12 @@ export const users = pgTable('users', {
   emailVerifiedAt: timestamptz('email_verified_at'),
   timezone: text('timezone').notNull().default('Europe/Bucharest'),
   createdAt: timestamptz('created_at').notNull().defaultNow(),
+  // Single-use, hashed (see packages/engine/src/token.ts). Not in the plan's data model; added
+  // because section 9 requires /verify-email, /forgot and /reset and there is no dedicated table.
+  emailVerifyTokenHash: text('email_verify_token_hash').unique(),
+  emailVerifyExpiresAt: timestamptz('email_verify_expires_at'),
+  passwordResetTokenHash: text('password_reset_token_hash').unique(),
+  passwordResetExpiresAt: timestamptz('password_reset_expires_at'),
 });
 
 export const sessions = pgTable(

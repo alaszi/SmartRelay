@@ -6,3 +6,5 @@ packages:
 # binaries through optional dependencies and does not need its postinstall step.
 allowBuilds:
   esbuild: false
+  # msgpackr's native accelerator; msgpackr has a pure-JS fallback so the build is unnecessary.
+  msgpackr-extract: false

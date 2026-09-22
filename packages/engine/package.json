@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@node-rs/argon2": "2.2.1",
     "@smartrelay/shared": "workspace:*",
     "jsonpath-plus": "10.4.0",
     "libphonenumber-js": "1.13.13",
