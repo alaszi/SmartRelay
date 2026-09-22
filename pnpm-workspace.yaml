@@ -8,3 +8,5 @@ allowBuilds:
   esbuild: false
   # msgpackr's native accelerator; msgpackr has a pure-JS fallback so the build is unnecessary.
   msgpackr-extract: false
+  # msw's postinstall only sets up its browser Service Worker file; we only use msw/node.
+  msw: false

@@ -26,6 +26,9 @@ export const ERROR_CODES = {
   UNSUPPORTED_CONTENT_TYPE: 'UNSUPPORTED_CONTENT_TYPE',
   RELAY_NOT_FOUND: 'RELAY_NOT_FOUND',
   RELAY_INACTIVE: 'RELAY_INACTIVE',
+
+  // Module-level codes (packages/engine module adapters).
+  RECIPIENT_PATH_MISSING: 'RECIPIENT_PATH_MISSING',
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];

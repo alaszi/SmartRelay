@@ -1,5 +1,9 @@
 import { createDb } from '@smartrelay/db';
-import { createSmtpMailer, keyringFromEnv } from '@smartrelay/engine';
+import {
+  createProductionModuleRegistry,
+  createSmtpMailer,
+  keyringFromEnv,
+} from '@smartrelay/engine';
 import { DELIVER_QUEUE_NAME, loadEnvOrExit } from '@smartrelay/shared';
 import { Queue } from 'bullmq';
 import Redis from 'ioredis';
@@ -15,9 +19,8 @@ const mailer = createSmtpMailer({
 });
 const deliverQueue = new Queue(DELIVER_QUEUE_NAME, { connection: redis });
 
-// Empty until Phase 3 ships real module adapters (webhook_sms, email_api, chat_relay,
-// calendar_bridge); until then, ingest reports MODULE_NOT_IMPLEMENTED for every relay type.
-const app = buildApp({ env, db, redis, keyring, mailer, deliverQueue, modules: {} });
+const modules = createProductionModuleRegistry();
+const app = buildApp({ env, db, redis, keyring, mailer, deliverQueue, modules });
 
 try {
   await app.listen({ port: env.API_PORT, host: '0.0.0.0' });

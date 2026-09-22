@@ -1,5 +1,10 @@
 import { createDb, getEventById } from '@smartrelay/db';
-import { createSafeHttpClient, createSmtpMailer, keyringFromEnv } from '@smartrelay/engine';
+import {
+  createProductionModuleRegistry,
+  createSafeHttpClient,
+  createSmtpMailer,
+  keyringFromEnv,
+} from '@smartrelay/engine';
 import {
   DELIVER_MAX_ATTEMPTS,
   DELIVER_QUEUE_NAME,
@@ -24,7 +29,6 @@ const mailer = createSmtpMailer({
 const deliverQueue = new Queue(DELIVER_QUEUE_NAME, { connection });
 const http = createSafeHttpClient();
 
-// Empty until Phase 3 ships real module adapters; every relay type reports MODULE_NOT_IMPLEMENTED.
 const ctx: WorkerContext = {
   env,
   db,
@@ -32,7 +36,7 @@ const ctx: WorkerContext = {
   keyring,
   mailer,
   deliverQueue,
-  modules: {},
+  modules: createProductionModuleRegistry(),
   http,
 };
 
