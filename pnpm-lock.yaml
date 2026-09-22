@@ -279,6 +279,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@smartrelay/engine':
+        specifier: workspace:*
+        version: link:../engine
       '@smartrelay/shared':
         specifier: workspace:*
         version: link:../shared
@@ -289,9 +292,6 @@ importers:
         specifier: 8.23.0
         version: 8.23.0
     devDependencies:
-      '@smartrelay/engine':
-        specifier: workspace:*
-        version: link:../engine
       '@types/pg':
         specifier: ^8.23.1
         version: 8.23.1
