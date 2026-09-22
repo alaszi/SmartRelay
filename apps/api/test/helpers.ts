@@ -1,12 +1,29 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { createDb, seedPricing, type DbHandle } from '@smartrelay/db';
-import { createRecordingMailer, Keyring, type RecordingMailer } from '@smartrelay/engine';
+import {
+  createRecordingMailer,
+  Keyring,
+  type ModuleRegistry,
+  type RecordingMailer,
+} from '@smartrelay/engine';
+import { createEchoModule } from '@smartrelay/engine/testing';
 import { DELIVER_QUEUE_NAME, type Env } from '@smartrelay/shared';
 import { Queue } from 'bullmq';
 import { sql } from 'drizzle-orm';
 import Redis from 'ioredis';
 import { buildApp, type App } from '../src/app';
 import type { AppContext } from '../src/context';
+
+/** Every relay type wired to the echo test module, at realistic prices, so any relay a test
+ * creates is immediately deliverable end to end. */
+export function defaultTestModules(): ModuleRegistry {
+  return {
+    webhook_sms: createEchoModule('webhook_sms', 'sms_dispatch'),
+    email_api: createEchoModule('email_api', 'relay_http'),
+    chat_relay: createEchoModule('chat_relay', 'relay_http'),
+    calendar_bridge: createEchoModule('calendar_bridge', 'calendar_event'),
+  };
+}
 
 export const TEST_APP_URL = 'http://localhost:3000';
 
@@ -63,7 +80,10 @@ export interface TestApp {
   close: () => Promise<void>;
 }
 
-export function buildTestApp(overrides: Partial<Env> = {}): TestApp {
+export function buildTestApp(
+  overrides: Partial<Env> = {},
+  modules: ModuleRegistry = defaultTestModules(),
+): TestApp {
   const env = testEnv(overrides);
   const dbHandle = createDb(env.DATABASE_URL);
   const redis = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
@@ -74,7 +94,7 @@ export function buildTestApp(overrides: Partial<Env> = {}): TestApp {
     connection: redis,
   });
 
-  const ctx: AppContext = { env, db: dbHandle.db, redis, keyring, mailer, deliverQueue };
+  const ctx: AppContext = { env, db: dbHandle.db, redis, keyring, mailer, deliverQueue, modules };
   const app = buildApp(ctx);
 
   return {

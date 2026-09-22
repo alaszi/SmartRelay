@@ -15,7 +15,9 @@ const mailer = createSmtpMailer({
 });
 const deliverQueue = new Queue(DELIVER_QUEUE_NAME, { connection: redis });
 
-const app = buildApp({ env, db, redis, keyring, mailer, deliverQueue });
+// Empty until Phase 3 ships real module adapters (webhook_sms, email_api, chat_relay,
+// calendar_bridge); until then, ingest reports MODULE_NOT_IMPLEMENTED for every relay type.
+const app = buildApp({ env, db, redis, keyring, mailer, deliverQueue, modules: {} });
 
 try {
   await app.listen({ port: env.API_PORT, host: '0.0.0.0' });

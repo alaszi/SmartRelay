@@ -16,6 +16,7 @@ import { HttpError } from './http-error';
 import { createLogger } from './logger';
 import { registerAuthRoutes } from './routes/auth';
 import { registerHealthRoutes } from './routes/health';
+import { registerIngestRoutes } from './routes/ingest';
 import { registerRelayRoutes } from './routes/relays';
 
 declare module 'fastify' {
@@ -100,6 +101,18 @@ export function buildApp(ctx: AppContext): App {
       return;
     }
 
+    if (error.statusCode === 413) {
+      reply.status(413).send({ error: { code: 'BODY_TOO_LARGE', message: error.message } });
+      return;
+    }
+
+    if (error.statusCode === 415) {
+      reply
+        .status(415)
+        .send({ error: { code: 'UNSUPPORTED_CONTENT_TYPE', message: error.message } });
+      return;
+    }
+
     if (typeof error.statusCode === 'number' && error.statusCode < 500) {
       reply.status(error.statusCode).send({
         error: { code: 'VALIDATION_ERROR', message: error.message },
@@ -118,6 +131,7 @@ export function buildApp(ctx: AppContext): App {
     registerHealthRoutes(instance);
     registerAuthRoutes(instance, ctx, { secureCookies, sameOrigin });
     registerRelayRoutes(instance, ctx, { sameOrigin });
+    registerIngestRoutes(instance, ctx);
   });
 
   return app;

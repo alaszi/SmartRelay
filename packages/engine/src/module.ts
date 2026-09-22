@@ -51,3 +51,11 @@ export interface RelayModule<TConfig> {
   /** Prefills the "Send Test Payload" step. */
   sampleInput: () => unknown;
 }
+
+/**
+ * Maps a relay type to its adapter. `any` is deliberate: each module has its own config type, and
+ * the registry is looked up generically by the pipeline (ingest, worker) which only ever passes a
+ * module its own already-validated config. A type with no entry is not implemented yet.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type ModuleRegistry = Partial<Record<RelayType, RelayModule<any>>>;
