@@ -1,4 +1,5 @@
 export * from './client';
+export * from './deliver';
 export * from './events';
 export * from './ledger';
 export * from './migrate';

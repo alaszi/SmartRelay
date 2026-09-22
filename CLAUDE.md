@@ -24,6 +24,12 @@ The single source of truth for scope and order of work is `MASTER_PLAN.md`. Read
 - After each phase, give a 5-line status: done / decisions applied / deviations / risks / next.
 - Ask the owner only when a decision is truly missing from the plan and blocks progress. Batch questions.
 
+## Self-check before ending a phase
+- Did any file in apps/api import from apps/worker, or vice versa (or the reverse into apps/web)? If yes, that's a boundary violation — move the shared logic into packages/ instead and flag it, don't route around it.
+- Does anything still say `TODO(verify-docs)`? Either verify it now or list it explicitly as an open risk.
+- Re-read section 8 (security) and section 15 (acceptance checklist) — note anything this phase touches that isn't yet true.
+- Any reinterpretation of a stated requirement (like the fake-timers case in Phase 2) needs its own line in "Deviations," not just to be folded into "Done."
+
 ## Environment notes
 - The repo lives at `D:\PER\Smartrelay` on Windows. Run git from Windows PowerShell/cmd, not from WSL on `/mnt/d` (chmod / `config.lock` errors). If working inside WSL, use a clone under the Linux filesystem.
 - Remote: `github.com/alaszi/SmartRelay`. A `403` on push usually means the collaborator invite for the pushing account is missing or not accepted.

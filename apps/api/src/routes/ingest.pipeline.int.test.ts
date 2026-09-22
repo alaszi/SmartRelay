@@ -6,21 +6,27 @@ import {
   creditTopup,
   getBalance,
   getEventById,
+  releaseHeldEvents,
+  runDeliverJob,
+  type DeliverDeps,
   type UserRow,
 } from '@smartrelay/db';
 import { createSafeHttpClient } from '@smartrelay/engine';
-import { Worker } from 'bullmq';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildTestApp, resetDb, type TestApp } from '../../test/helpers';
-// Cross-package relative import: apps/worker's own runtime dependencies (bullmq, @smartrelay/db,
-// @smartrelay/shared) are already direct dependencies of apps/api too, so this resolves cleanly.
-import { createDeliverProcessor } from '../../../worker/src/deliver';
-import { releaseHeldEventsForUser } from '../../../worker/src/release';
-import type { WorkerContext } from '../../../worker/src/context';
+
+/**
+ * "Process the deliver job" here means calling packages/db's runDeliverJob directly, the same
+ * queue-agnostic function apps/worker's BullMQ processor calls (apps/worker/src/deliver.ts). That
+ * keeps this test from importing apps/worker's source, or needing a live BullMQ Worker consuming
+ * the queue: the real ingest route still does the enqueueing, so its behaviour is exercised, and
+ * the delivery/retry/charge logic itself is already covered exhaustively in
+ * packages/db/src/deliver.int.test.ts.
+ */
 
 let testApp: TestApp;
 let user: UserRow;
-let worker: Worker | undefined;
+let deps: DeliverDeps;
 const servers: http.Server[] = [];
 
 beforeEach(async () => {
@@ -30,11 +36,20 @@ beforeEach(async () => {
     email: `pipeline-${Math.random().toString(36).slice(2)}@example.com`,
     passwordHash: 'h',
   });
+  deps = {
+    keyring: testApp.ctx.keyring,
+    modules: testApp.ctx.modules,
+    // Test destinations bind to a random ephemeral port, so every port must be allowed (the
+    // default allow-list is just 80/443); address-level SSRF checks live in
+    // packages/engine/src/safe-http.test.ts and are not what this test is about.
+    http: createSafeHttpClient({
+      unsafeAllowPrivateAddresses: true,
+      allowedPorts: Array.from({ length: 65535 }, (_, i) => i + 1),
+    }),
+  };
 });
 
 afterEach(async () => {
-  await worker?.close();
-  worker = undefined;
   await Promise.all(
     servers.splice(0).map(
       (server) =>
@@ -46,52 +61,6 @@ afterEach(async () => {
   );
   await testApp.close();
 });
-
-function startWorker(): WorkerContext {
-  const workerCtx: WorkerContext = {
-    ...testApp.ctx,
-    http: createSafeHttpClient({
-      unsafeAllowPrivateAddresses: true,
-      allowedPorts: Array.from({ length: 65535 }, (_, i) => i + 1),
-    }),
-  };
-  worker = new Worker(testApp.ctx.deliverQueue.name, createDeliverProcessor(workerCtx), {
-    connection: testApp.ctx.redis,
-  });
-  return workerCtx;
-}
-
-function waitForJob(
-  target: Worker,
-  jobId: string,
-  timeoutMs = 10_000,
-): Promise<'completed' | 'failed'> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      cleanup();
-      reject(new Error(`timed out waiting for job ${jobId}`));
-    }, timeoutMs);
-    const onCompleted = (job: { id?: string }) => {
-      if (job.id === jobId) {
-        cleanup();
-        resolve('completed');
-      }
-    };
-    const onFailed = (job: { id?: string } | undefined) => {
-      if (job?.id === jobId) {
-        cleanup();
-        resolve('failed');
-      }
-    };
-    function cleanup() {
-      clearTimeout(timer);
-      target.off('completed', onCompleted);
-      target.off('failed', onFailed);
-    }
-    target.on('completed', onCompleted);
-    target.on('failed', onFailed);
-  });
-}
 
 async function startDestination(
   handler: (request: IncomingMessage, response: ServerResponse) => void,
@@ -110,6 +79,15 @@ async function topUp(amountMicro: bigint) {
   });
 }
 
+async function ingestJson(token: string, payload: unknown) {
+  return testApp.app.inject({
+    method: 'POST',
+    url: `/i/${token}`,
+    headers: { 'content-type': 'application/json' },
+    payload: JSON.stringify(payload),
+  });
+}
+
 describe('full pipeline: ingest -> deliver -> charge', () => {
   it('posts a webhook and observes SUCCESS + a ledger charge at the module price', async () => {
     await topUp(1_000_000n);
@@ -120,20 +98,16 @@ describe('full pipeline: ingest -> deliver -> charge', () => {
       type: 'webhook_sms',
       configPublic: { url, template: 'Hi {{$.name}}' },
     });
-    startWorker();
     const balanceBefore = await getBalance(testApp.ctx.db, user.id);
 
-    const response = await testApp.app.inject({
-      method: 'POST',
-      url: `/i/${r.ingestToken}`,
-      headers: { 'content-type': 'application/json' },
-      payload: JSON.stringify({ name: 'Ana' }),
-    });
+    const response = await ingestJson(r.ingestToken, { name: 'Ana' });
     expect(response.statusCode).toBe(202);
     const { eventId } = response.json();
+    expect((await getEventById(testApp.ctx.db, eventId))?.status).toBe('QUEUED');
 
-    expect(await waitForJob(worker!, eventId)).toBe('completed');
+    const outcome = await runDeliverJob(testApp.ctx.db, deps, { eventId, attemptNo: 1 });
 
+    expect(outcome).toEqual({ kind: 'success' });
     const event = await getEventById(testApp.ctx.db, eventId);
     expect(event?.status).toBe('SUCCESS');
     expect(event?.costMicro).toBe(25_000n); // webhook_sms -> sms_dispatch
@@ -141,7 +115,7 @@ describe('full pipeline: ingest -> deliver -> charge', () => {
     expect(await getBalance(testApp.ctx.db, user.id)).toBe(balanceBefore - 25_000n);
   });
 
-  it('retries a 500 and eventually marks the event FAILED, unbilled, after the retries are exhausted', async () => {
+  it('reports "retry" for a 500 destination and leaves the event unbilled', async () => {
     await topUp(1_000_000n);
     let calls = 0;
     const url = await startDestination((_req, res) => {
@@ -155,23 +129,15 @@ describe('full pipeline: ingest -> deliver -> charge', () => {
       type: 'chat_relay',
       configPublic: { url, template: '{{$.name}}' },
     });
-    startWorker();
     const balanceBefore = await getBalance(testApp.ctx.db, user.id);
 
-    const response = await testApp.app.inject({
-      method: 'POST',
-      url: `/i/${r.ingestToken}`,
-      headers: { 'content-type': 'application/json' },
-      payload: JSON.stringify({ name: 'Ana' }),
-    });
+    const response = await ingestJson(r.ingestToken, { name: 'Ana' });
     const { eventId } = response.json();
 
-    // BullMQ's real backoff is 1/5/15 min (see packages/shared/src/queue.test.ts for the exact
-    // values); waiting that out for real is impractical here, so only the first, immediate attempt
-    // is observed — enough to prove the destination was actually called and nothing was charged.
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    const outcome = await runDeliverJob(testApp.ctx.db, deps, { eventId, attemptNo: 1 });
 
-    expect(calls).toBeGreaterThanOrEqual(1);
+    expect(outcome.kind).toBe('retry');
+    expect(calls).toBe(1);
     const event = await getEventById(testApp.ctx.db, eventId);
     expect(event?.status).toBe('PROCESSING');
     expect(event?.costMicro).toBe(0n);
@@ -189,25 +155,20 @@ describe('out-of-credit hold -> top-up -> auto-release', () => {
       configPublic: { url, template: 'Hi {{$.name}}' },
     });
 
-    const ingestResponse = await testApp.app.inject({
-      method: 'POST',
-      url: `/i/${r.ingestToken}`,
-      headers: { 'content-type': 'application/json' },
-      payload: JSON.stringify({ name: 'Ana' }),
-    });
+    const ingestResponse = await ingestJson(r.ingestToken, { name: 'Ana' });
     expect(ingestResponse.statusCode).toBe(202);
     expect(ingestResponse.json().held).toBe(true);
     const { eventId } = ingestResponse.json();
     expect((await getEventById(testApp.ctx.db, eventId))?.status).toBe('HELD_NO_CREDIT');
 
-    const workerCtx = startWorker();
     await topUp(1_000_000n);
-    const released = await releaseHeldEventsForUser(workerCtx, user.id);
-    expect(released).toBe(1);
+    const released = await releaseHeldEvents(testApp.ctx.db, user.id);
+    expect(released.map((event) => event.id)).toEqual([eventId]);
     expect((await getEventById(testApp.ctx.db, eventId))?.status).toBe('QUEUED');
 
-    expect(await waitForJob(worker!, eventId)).toBe('completed');
+    const outcome = await runDeliverJob(testApp.ctx.db, deps, { eventId, attemptNo: 1 });
 
+    expect(outcome).toEqual({ kind: 'success' });
     const event = await getEventById(testApp.ctx.db, eventId);
     expect(event?.status).toBe('SUCCESS');
     expect(event?.costMicro).toBe(25_000n);
@@ -225,20 +186,18 @@ describe('out-of-credit hold -> top-up -> auto-release', () => {
 
     const eventIds: string[] = [];
     for (let i = 0; i < 3; i++) {
-      const response = await testApp.app.inject({
-        method: 'POST',
-        url: `/i/${r.ingestToken}`,
-        headers: { 'content-type': 'application/json' },
-        payload: JSON.stringify({ n: i }),
-      });
+      const response = await ingestJson(r.ingestToken, { n: i });
       eventIds.push(response.json().eventId);
     }
 
-    const workerCtx = startWorker();
     await topUp(1_000_000n);
-    await releaseHeldEventsForUser(workerCtx, user.id);
+    const released = await releaseHeldEvents(testApp.ctx.db, user.id);
+    expect(released.map((event) => event.id)).toEqual(eventIds); // oldest-first, insertion order
 
-    await Promise.all(eventIds.map((id) => waitForJob(worker!, id)));
+    for (const eventId of eventIds) {
+      const outcome = await runDeliverJob(testApp.ctx.db, deps, { eventId, attemptNo: 1 });
+      expect(outcome).toEqual({ kind: 'success' });
+    }
     const statuses = await Promise.all(eventIds.map((id) => getEventById(testApp.ctx.db, id)));
     expect(statuses.every((event) => event?.status === 'SUCCESS')).toBe(true);
   });

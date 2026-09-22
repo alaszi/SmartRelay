@@ -1,6 +1,7 @@
 import { and, asc, eq, gt, isNotNull, lt, sql } from 'drizzle-orm';
 import type { EventSource, EventStatus } from '@smartrelay/shared';
-import type { Executor } from './client';
+import type { Db, Executor } from './client';
+import { clearNotification } from './notifications';
 import { deliveryAttempts, eventPayloads, events } from './schema';
 
 export type EventRow = typeof events.$inferSelect;
@@ -160,6 +161,22 @@ export async function listHeldEventsForUser(db: Executor, userId: string): Promi
     .from(events)
     .where(and(eq(events.userId, userId), eq(events.status, 'HELD_NO_CREDIT')))
     .orderBy(asc(events.receivedAt));
+}
+
+/**
+ * Queue-agnostic half of "on successful top-up, release held events" (MASTER_PLAN section 7):
+ * flips each of a user's held events to QUEUED, oldest-first, and clears the low-balance
+ * notification dedupe key so a fresh dip below EUR 1 after this top-up can notify again
+ * ("deduped per top-up cycle"). Returns the events that were released; the caller (apps/worker,
+ * which owns the BullMQ queue) is responsible for actually enqueuing a deliver job for each one.
+ */
+export async function releaseHeldEvents(db: Db, userId: string): Promise<EventRow[]> {
+  return db.transaction(async (tx) => {
+    await clearNotification(tx, { userId, dedupeKey: 'low-balance' });
+    const held = await listHeldEventsForUser(tx, userId);
+    for (const event of held) await markQueued(tx, event.id);
+    return held;
+  });
 }
 
 /** Maintenance job: held events past their 48 h deadline expire. Returns how many were expired. */
