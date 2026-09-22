@@ -16,6 +16,7 @@ import { HttpError } from './http-error';
 import { createLogger } from './logger';
 import { registerAuthRoutes } from './routes/auth';
 import { registerHealthRoutes } from './routes/health';
+import { registerInboundEmailRoutes } from './routes/inbound-email';
 import { registerIngestRoutes } from './routes/ingest';
 import { registerRelayRoutes } from './routes/relays';
 
@@ -132,6 +133,7 @@ export function buildApp(ctx: AppContext): App {
     registerAuthRoutes(instance, ctx, { secureCookies, sameOrigin });
     registerRelayRoutes(instance, ctx, { sameOrigin });
     registerIngestRoutes(instance, ctx);
+    registerInboundEmailRoutes(instance, ctx);
   });
 
   return app;

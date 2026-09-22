@@ -4,6 +4,7 @@ export * from './ip';
 export * from './jsonpath';
 export * from './mail';
 export * from './module';
+export * from './module-email-api';
 export * from './module-webhook-sms';
 export * from './password';
 export * from './phone';

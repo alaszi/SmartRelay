@@ -260,7 +260,7 @@ describe('runDeliverJob: pipeline edge cases', () => {
     const relay = await createRelay(handle.db, deps.keyring, {
       userId: user.id,
       name: 'no module',
-      type: 'email_api',
+      type: 'calendar_bridge',
       configPublic: {},
     });
     const event = await newEvent(relay.id, user.id);

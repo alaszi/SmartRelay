@@ -37,7 +37,11 @@ export function registerRelayRoutes(
       if (user.emailVerifiedAt === null) {
         throw new HttpError(403, 'EMAIL_NOT_VERIFIED', 'Verify your email before creating a relay');
       }
-      const relay = await createRelay(ctx.db, ctx.keyring, { userId: user.id, ...request.body });
+      const relay = await createRelay(ctx.db, ctx.keyring, {
+        userId: user.id,
+        ...request.body,
+        inboundDomain: ctx.env.INBOUND_DOMAIN,
+      });
       reply.status(201);
       return { relay };
     },
