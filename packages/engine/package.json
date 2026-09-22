@@ -15,10 +15,12 @@
     "@smartrelay/shared": "workspace:*",
     "jsonpath-plus": "10.4.0",
     "libphonenumber-js": "1.13.13",
+    "luxon": "^3.7.2",
     "nodemailer": "^7.0.13",
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@types/luxon": "^3.7.5",
     "@types/nodemailer": "^8.0.2",
     "msw": "2.15.0"
   }

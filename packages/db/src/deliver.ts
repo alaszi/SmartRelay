@@ -32,6 +32,8 @@ export interface DeliverDeps {
   modules: ModuleRegistry;
   /** The only way the module reaches a user-supplied URL. */
   http: SafeHttpClient;
+  /** Module 4 only (Google Calendar); undefined when GOOGLE_CLIENT_ID/SECRET are not configured. */
+  google?: { clientId: string; clientSecret: string };
 }
 
 /**
@@ -96,7 +98,13 @@ export async function runDeliverJob(
   const result = await relayModule.execute({
     config: parsedConfig.data,
     payload,
-    ctx: { eventId, userTimezone: 'Europe/Bucharest', http: deps.http, now: new Date() },
+    ctx: {
+      eventId,
+      userTimezone: 'Europe/Bucharest',
+      http: deps.http,
+      now: new Date(),
+      ...(deps.google ? { google: deps.google } : {}),
+    },
   });
   const durationMs = Date.now() - startedAt;
 

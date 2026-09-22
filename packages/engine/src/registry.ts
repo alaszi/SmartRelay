@@ -1,3 +1,4 @@
+import { calendarBridgeModule } from './module-calendar-bridge';
 import { chatRelayModule } from './module-chat-relay';
 import { emailApiModule } from './module-email-api';
 import { webhookSmsModule } from './module-webhook-sms';
@@ -15,5 +16,6 @@ export function createProductionModuleRegistry(): ModuleRegistry {
     webhook_sms: webhookSmsModule,
     email_api: emailApiModule,
     chat_relay: chatRelayModule,
+    calendar_bridge: calendarBridgeModule,
   };
 }

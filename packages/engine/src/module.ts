@@ -8,6 +8,9 @@ export interface ModuleContext {
   /** The only way an adapter may reach a user-supplied URL. */
   http: SafeHttpClient;
   now: Date;
+  /** The app's own Google OAuth client (shared across every user's Calendar connection, unlike a
+   * per-relay secret). Undefined when GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET are not configured. */
+  google?: { clientId: string; clientSecret: string };
 }
 
 export interface ModuleSuccess {

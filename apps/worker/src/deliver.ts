@@ -11,10 +11,15 @@ import type { WorkerContext } from './context';
  * be reused (e.g. by tests) without pulling in BullMQ or coupling to this app.
  */
 export function createDeliverProcessor(ctx: WorkerContext) {
+  const google =
+    ctx.env.GOOGLE_CLIENT_ID && ctx.env.GOOGLE_CLIENT_SECRET
+      ? { clientId: ctx.env.GOOGLE_CLIENT_ID, clientSecret: ctx.env.GOOGLE_CLIENT_SECRET }
+      : undefined;
+
   return async function processDeliver(job: Job<DeliverJobData>): Promise<void> {
     const outcome = await runDeliverJob(
       ctx.db,
-      { keyring: ctx.keyring, modules: ctx.modules, http: ctx.http },
+      { keyring: ctx.keyring, modules: ctx.modules, http: ctx.http, ...(google ? { google } : {}) },
       { eventId: job.data.eventId, attemptNo: job.attemptsMade + 1 },
     );
 
