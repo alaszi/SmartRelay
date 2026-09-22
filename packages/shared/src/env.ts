@@ -33,6 +33,7 @@ const optionalSecret = z.string().min(1).optional();
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   APP_URL: z.url({ protocol: /^https?$/ }),
+  API_PORT: z.coerce.number().int().min(1).max(65535).default(3001),
   INBOUND_DOMAIN: z.hostname(),
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
   REDIS_URL: z.url({ protocol: /^rediss?$/ }),

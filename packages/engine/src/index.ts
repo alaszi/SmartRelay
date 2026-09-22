@@ -2,6 +2,7 @@ export * from './crypto';
 export * from './hmac';
 export * from './ip';
 export * from './jsonpath';
+export * from './mail';
 export * from './module';
 export * from './password';
 export * from './phone';

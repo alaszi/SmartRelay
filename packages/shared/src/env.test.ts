@@ -43,6 +43,7 @@ describe('loadEnv', () => {
     expect(env.WHATSAPP_ENABLED).toBe(false);
     expect(env.TRUST_CLOUDFLARE).toBe(false);
     expect(env.SENTRY_DSN).toBeUndefined();
+    expect(env.API_PORT).toBe(3001);
   });
 
   it('reports every missing required variable in one error', () => {
@@ -209,6 +210,21 @@ describe('loadEnv', () => {
     it('accepts a complete production environment', () => {
       const env = loadEnv({ ...devEnv, ...prodExtras, NODE_ENV: 'production' });
       expect(env.NODE_ENV).toBe('production');
+    });
+  });
+
+  describe('API_PORT', () => {
+    it('coerces a numeric string and rejects out-of-range or non-numeric values', () => {
+      expect(loadEnv({ ...devEnv, API_PORT: '8080' }).API_PORT).toBe(8080);
+      expect(issuesFor({ ...devEnv, API_PORT: '0' })).toEqual([
+        expect.stringContaining('API_PORT'),
+      ]);
+      expect(issuesFor({ ...devEnv, API_PORT: '70000' })).toEqual([
+        expect.stringContaining('API_PORT'),
+      ]);
+      expect(issuesFor({ ...devEnv, API_PORT: 'abc' })).toEqual([
+        expect.stringContaining('API_PORT'),
+      ]);
     });
   });
 

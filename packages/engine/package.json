@@ -14,6 +14,10 @@
     "@smartrelay/shared": "workspace:*",
     "jsonpath-plus": "10.4.0",
     "libphonenumber-js": "1.13.13",
+    "nodemailer": "^7.0.13",
     "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/nodemailer": "^8.0.2"
   }
 }

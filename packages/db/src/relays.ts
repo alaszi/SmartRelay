@@ -62,9 +62,9 @@ export interface RelayInput {
   userId: string;
   name: string;
   type: RelayRow['type'];
-  configPublic?: Record<string, unknown>;
+  configPublic?: Record<string, unknown> | undefined;
   /** Plaintext; encrypted before storage and never returned. */
-  configSecret?: Record<string, unknown>;
+  configSecret?: Record<string, unknown> | undefined;
 }
 
 export async function createRelay(
@@ -127,10 +127,10 @@ export async function getRelayInternal(db: Executor, id: string): Promise<RelayR
 }
 
 export interface RelayUpdateInput {
-  name?: string;
-  status?: RelayRow['status'];
-  configPublic?: Record<string, unknown>;
-  configSecret?: Record<string, unknown>;
+  name?: string | undefined;
+  status?: RelayRow['status'] | undefined;
+  configPublic?: Record<string, unknown> | undefined;
+  configSecret?: Record<string, unknown> | undefined;
 }
 
 export async function updateRelay(
