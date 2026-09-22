@@ -2,6 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { createDb, seedPricing, type DbHandle } from '@smartrelay/db';
 import {
   createRecordingMailer,
+  createSafeHttpClient,
   Keyring,
   type ModuleRegistry,
   type RecordingMailer,
@@ -94,7 +95,23 @@ export function buildTestApp(
     connection: redis,
   });
 
-  const ctx: AppContext = { env, db: dbHandle.db, redis, keyring, mailer, deliverQueue, modules };
+  // Test destinations bind to a random ephemeral port, so every port must be allowed (the default
+  // allow-list is just 80/443). Address-level SSRF checks are covered elsewhere
+  // (packages/engine/src/safe-http.test.ts); this only relaxes what test servers need.
+  const http = createSafeHttpClient({
+    unsafeAllowPrivateAddresses: true,
+    allowedPorts: Array.from({ length: 65535 }, (_, i) => i + 1),
+  });
+  const ctx: AppContext = {
+    env,
+    db: dbHandle.db,
+    redis,
+    keyring,
+    mailer,
+    deliverQueue,
+    modules,
+    http,
+  };
   const app = buildApp(ctx);
 
   return {

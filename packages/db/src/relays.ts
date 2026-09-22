@@ -42,6 +42,11 @@ export function generateInboundEmailAddress(inboundDomain: string): string {
   return `r_${randomBytes(4).toString('hex')}@${inboundDomain.toLowerCase()}`;
 }
 
+/** Bearer secret for `POST /tg/:relayId/:secret` (MASTER_PLAN section 6, Module 3, decision D5). */
+export function generateTelegramCallbackSecret(): string {
+  return generateToken(24);
+}
+
 function encryptSecret(
   keyring: Keyring,
   relayId: string,
@@ -99,6 +104,11 @@ export async function createRelay(
 
     // Generated up front so the encrypted secret's AAD (the relay id) is bound from the first write.
     const id = randomUUID();
+    const isTelegramChatRelay =
+      input.type === 'chat_relay' && input.configPublic?.['platform'] === 'telegram';
+    const configSecret = isTelegramChatRelay
+      ? { ...input.configSecret, tgCallbackSecret: generateTelegramCallbackSecret() }
+      : input.configSecret;
     const [row] = await tx
       .insert(relays)
       .values({
@@ -108,7 +118,7 @@ export async function createRelay(
         type: input.type,
         ingestToken: generateIngestToken(),
         configPublic: input.configPublic ?? {},
-        configSecret: encryptSecret(keyring, id, input.configSecret),
+        configSecret: encryptSecret(keyring, id, configSecret),
       })
       .returning();
     if (!row) throw new Error('relay insert returned no row');

@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, isNotNull, lt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, isNotNull, lt, sql } from 'drizzle-orm';
 import type { EventSource, EventStatus } from '@smartrelay/shared';
 import type { Db, Executor } from './client';
 import { clearNotification } from './notifications';
@@ -22,10 +22,13 @@ export interface CreateEventInput {
 
 /**
  * Inserts one event, and its payload when given. Terminal statuses (REJECTED, DROPPED_LOOP,
- * FAILED) get `finishedAt` set immediately, since nothing further will happen to them.
+ * FAILED, and SUCCESS for the rare case a caller creates an already-finished event directly, e.g.
+ * a log-only Telegram callback) get `finishedAt` set immediately, since nothing further will
+ * happen to them. A billed delivery instead reaches SUCCESS via `chargeEvent`, which sets its own
+ * `finishedAt`.
  */
 export async function createEvent(db: Executor, input: CreateEventInput): Promise<EventRow> {
-  const terminal = new Set<EventStatus>(['REJECTED', 'DROPPED_LOOP', 'FAILED']);
+  const terminal = new Set<EventStatus>(['REJECTED', 'DROPPED_LOOP', 'FAILED', 'SUCCESS']);
 
   const [event] = await db
     .insert(events)
@@ -56,6 +59,15 @@ export async function createEvent(db: Executor, input: CreateEventInput): Promis
 export async function getEventById(db: Executor, id: string): Promise<EventRow | undefined> {
   const [event] = await db.select().from(events).where(eq(events.id, id)).limit(1);
   return event;
+}
+
+/** Newest-first. Mainly for tests and admin inspection; no route lists a relay's raw events yet. */
+export async function listEventsForRelay(db: Executor, relayId: string): Promise<EventRow[]> {
+  return db
+    .select()
+    .from(events)
+    .where(eq(events.relayId, relayId))
+    .orderBy(desc(events.receivedAt));
 }
 
 export async function getEventPayloadIn(db: Executor, eventId: string): Promise<unknown> {

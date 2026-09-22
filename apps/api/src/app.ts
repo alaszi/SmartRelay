@@ -19,6 +19,7 @@ import { registerHealthRoutes } from './routes/health';
 import { registerInboundEmailRoutes } from './routes/inbound-email';
 import { registerIngestRoutes } from './routes/ingest';
 import { registerRelayRoutes } from './routes/relays';
+import { registerTelegramCallbackRoutes } from './routes/telegram-callback';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -134,6 +135,7 @@ export function buildApp(ctx: AppContext): App {
     registerRelayRoutes(instance, ctx, { sameOrigin });
     registerIngestRoutes(instance, ctx);
     registerInboundEmailRoutes(instance, ctx);
+    registerTelegramCallbackRoutes(instance, ctx);
   });
 
   return app;

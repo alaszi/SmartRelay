@@ -26,6 +26,8 @@ export interface ModuleFailure {
   /** Must not contain secrets or payload content. */
   message: string;
   statusCode?: number;
+  /** From a 429's `Retry-After` header; the caller's backoff should honor it if larger (section 5). */
+  retryAfterMs?: number;
   request?: unknown;
   response?: unknown;
 }

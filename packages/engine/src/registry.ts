@@ -1,3 +1,4 @@
+import { chatRelayModule } from './module-chat-relay';
 import { emailApiModule } from './module-email-api';
 import { webhookSmsModule } from './module-webhook-sms';
 import type { ModuleRegistry } from './module';
@@ -13,5 +14,6 @@ export function createProductionModuleRegistry(): ModuleRegistry {
   return {
     webhook_sms: webhookSmsModule,
     email_api: emailApiModule,
+    chat_relay: chatRelayModule,
   };
 }

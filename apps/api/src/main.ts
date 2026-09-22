@@ -1,6 +1,7 @@
 import { createDb } from '@smartrelay/db';
 import {
   createProductionModuleRegistry,
+  createSafeHttpClient,
   createSmtpMailer,
   keyringFromEnv,
 } from '@smartrelay/engine';
@@ -20,7 +21,8 @@ const mailer = createSmtpMailer({
 const deliverQueue = new Queue(DELIVER_QUEUE_NAME, { connection: redis });
 
 const modules = createProductionModuleRegistry();
-const app = buildApp({ env, db, redis, keyring, mailer, deliverQueue, modules });
+const http = createSafeHttpClient();
+const app = buildApp({ env, db, redis, keyring, mailer, deliverQueue, modules, http });
 
 try {
   await app.listen({ port: env.API_PORT, host: '0.0.0.0' });
