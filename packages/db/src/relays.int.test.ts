@@ -202,6 +202,33 @@ describe('updateRelay', () => {
     expect(decryptRelaySecret(keyring, stored!)).toEqual({ apiKey: 'new-key' });
   });
 
+  it('merges a partial configSecret update instead of overwriting the whole blob (regression)', async () => {
+    // A relay can hold several independent secret fields at once (e.g. webhook_sms's Twilio
+    // config: accountSid + authToken). The web UI's SecretInput is write-only and can only ever
+    // supply the one field the user actually replaced, since it never sees the others' current
+    // values — so a bare `set.configSecret = encryptSecret(...)` on just that field would silently
+    // delete every other stored secret. This is exactly that scenario, isolated from the telegram
+    // auto-provisioning path exercised elsewhere.
+    const user = await createUser(handle.db);
+    const relay = await createRelay(handle.db, keyring, {
+      userId: user.id,
+      name: 'x',
+      type: 'webhook_sms',
+      configPublic: { provider: 'twilio' },
+      configSecret: { accountSid: 'AC_TEST', authToken: 'old-token' },
+    });
+
+    await updateRelay(handle.db, keyring, user.id, relay.id, {
+      configSecret: { authToken: 'new-token' },
+    });
+
+    const stored = await getRelayInternal(handle.db, relay.id);
+    expect(decryptRelaySecret(keyring, stored!)).toEqual({
+      accountSid: 'AC_TEST',
+      authToken: 'new-token',
+    });
+  });
+
   it('leaves configSecret untouched when not provided in the update', async () => {
     const user = await createUser(handle.db);
     const relay = await createRelay(handle.db, keyring, {
