@@ -12,9 +12,9 @@ export interface HmacSpec {
 
 /**
  * Presets from the plan (section 6, Module 1): HMAC of the raw body, keyed with the shared secret.
- * Shopify (header, HMAC-SHA256, base64, raw body) was checked against shopify.dev.
- * TODO(verify-docs): the WooCommerce values come from the plan; its official docs were not
- * reachable to confirm the header name, algorithm and encoding.
+ * Shopify (header, HMAC-SHA256, base64, raw body) was checked against shopify.dev. WooCommerce
+ * (X-WC-Webhook-Signature, base64 HMAC-SHA256, raw body) was checked against
+ * developer.woocommerce.com/docs/apis/rest-api/v3/webhooks/.
  */
 export const HMAC_PRESETS = {
   woocommerce: { header: 'x-wc-webhook-signature', algorithm: 'sha256', encoding: 'base64' },
