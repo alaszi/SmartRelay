@@ -4,10 +4,12 @@ import {
   decryptRelaySecret,
   findRecentEventByDedupeHash,
   findRelayByIngestToken,
+  findUserById,
   getBalance,
   getPriceMicro,
   markQueued,
   touchLastTriggered,
+  tryRecordNotification,
 } from '@smartrelay/db';
 import { verifyHmac, type HmacAlgorithm, type HmacEncoding } from '@smartrelay/engine';
 import {
@@ -177,6 +179,26 @@ export function registerIngestRoutes(app: App, ctx: AppContext): void {
             payloadIn: payload,
             ...(dedupeHash === undefined ? {} : { dedupeHash }),
           });
+          // MASTER_PLAN section 7: "one deduped email" per loop, not one per dropped request —
+          // dedupe key covers this relay for the rest of the 60s guard window it's already inside.
+          const shouldNotify = await tryRecordNotification(ctx.db, {
+            userId: relay.userId,
+            kind: 'loop-detected',
+            dedupeKey: `loop-detected:${relay.id}:${Math.floor(Date.now() / (LOOP_GUARD_WINDOW_S * 1000))}`,
+          });
+          if (shouldNotify) {
+            const user = await findUserById(ctx.db, relay.userId);
+            if (user) {
+              await ctx.mailer.send({
+                to: user.email,
+                subject: `SmartRelay: relay "${relay.name}" looks like it's looping`,
+                text:
+                  `More than ${LOOP_GUARD_THRESHOLD} identical requests hit "${relay.name}" within ` +
+                  `${LOOP_GUARD_WINDOW_S} seconds, so SmartRelay stopped relaying them (not billed). ` +
+                  'This usually means the destination is replying in a way that re-triggers the same relay.',
+              });
+            }
+          }
           reply.status(429);
           return { error: { code: 'LOOP_DETECTED', message: 'Too many identical requests' } };
         }

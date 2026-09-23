@@ -223,6 +223,20 @@ describe('loop guard', () => {
     expect(responses[10]?.json().eventId).toBeUndefined();
   });
 
+  it('sends one deduped notification email for the loop, not one per dropped request', async () => {
+    await topUp(10_000_000n);
+    const r = await relay();
+
+    for (let i = 0; i < 11; i++) {
+      await ingest(r.ingestToken, { body: JSON.stringify({ name: 'Ana' }) });
+    }
+    await ingest(r.ingestToken, { body: JSON.stringify({ name: 'Ana' }) }); // a 2nd drop, same window
+
+    const loopEmails = testApp.mailer.sent.filter((m) => m.subject.includes('looping'));
+    expect(loopEmails).toHaveLength(1);
+    expect(loopEmails[0]?.to).toBe(user.email);
+  });
+
   it('does not count payloads with different content toward the same loop key', async () => {
     await topUp(10_000_000n);
     const r = await relay();
