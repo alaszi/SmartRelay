@@ -30,6 +30,7 @@ const config: CalendarBridgeConfig = {
   startPath: '$.booking.start',
   endPath: '$.booking.end',
   refreshToken: 'refresh-1',
+  reminderMode: 'off',
 };
 
 describe('calendarBridgeModule contract', () => {
@@ -44,6 +45,78 @@ describe('calendarBridgeModule contract', () => {
     );
     expect(
       calendarBridgeModule.configSchema.safeParse({ ...config, refreshToken: '' }).success,
+    ).toBe(false);
+  });
+});
+
+describe('calendarBridgeModule contract: reminder (Advanced)', () => {
+  it('accepts reminderMode "off" with no other reminder fields', () => {
+    expect(calendarBridgeModule.configSchema.safeParse(config).success).toBe(true);
+  });
+
+  it('defaults to off when reminderMode is entirely absent (relays saved before this feature existed)', () => {
+    const { reminderMode: _reminderMode, ...withoutReminderMode } = config;
+    const parsed = calendarBridgeModule.configSchema.safeParse(withoutReminderMode);
+    expect(parsed).toMatchObject({ success: true, data: { reminderMode: 'off' } });
+  });
+
+  it('accepts each SMS provider variant when enabled, with its own required fields', () => {
+    expect(
+      calendarBridgeModule.configSchema.safeParse({
+        ...config,
+        reminderMode: 'smslink',
+        reminderOffsetMinutes: 60,
+        reminderRecipientPath: '$.customer.phone',
+        reminderTemplate: 'Reminder soon',
+        reminderConnectionId: 'conn1',
+        reminderSecret: 'pw1',
+      }).success,
+    ).toBe(true);
+
+    expect(
+      calendarBridgeModule.configSchema.safeParse({
+        ...config,
+        reminderMode: 'twilio',
+        reminderOffsetMinutes: 120,
+        reminderRecipientPath: '$.customer.phone',
+        reminderTemplate: 'Reminder soon',
+        reminderAccountSid: 'AC1',
+        reminderFrom: '+15551234567',
+        reminderSecret: 'tok1',
+      }).success,
+    ).toBe(true);
+
+    expect(
+      calendarBridgeModule.configSchema.safeParse({
+        ...config,
+        reminderMode: 'infobip',
+        reminderOffsetMinutes: 30,
+        reminderRecipientPath: '$.customer.phone',
+        reminderTemplate: 'Reminder soon',
+        reminderBaseUrl: 'https://api.infobip.example',
+        reminderSecret: 'key1',
+      }).success,
+    ).toBe(true);
+  });
+
+  it('rejects an enabled reminder missing a provider-specific field', () => {
+    expect(
+      calendarBridgeModule.configSchema.safeParse({
+        ...config,
+        reminderMode: 'twilio',
+        reminderOffsetMinutes: 120,
+        reminderRecipientPath: '$.customer.phone',
+        reminderTemplate: 'Reminder soon',
+        reminderAccountSid: 'AC1',
+        // reminderFrom and reminderSecret missing
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects an unknown reminderMode', () => {
+    expect(
+      calendarBridgeModule.configSchema.safeParse({ ...config, reminderMode: 'carrier-pigeon' })
+        .success,
     ).toBe(false);
   });
 });
@@ -74,7 +147,10 @@ describe('calendarBridgeModule.execute', () => {
       ctx: baseCtx(),
     });
 
-    expect(result).toMatchObject({ ok: true, extra: { googleEventId: 'evt_abc' } });
+    expect(result).toMatchObject({
+      ok: true,
+      extra: { googleEventId: 'evt_abc', startIso: '2026-03-01T10:00:00.000+02:00' },
+    });
     expect(seenBody?.summary).toBe('Booking: Ana');
     expect(seenBody?.start?.dateTime).toBe('2026-03-01T10:00:00.000+02:00');
     expect(seenBody?.end?.dateTime).toBe('2026-03-01T11:00:00.000+02:00');
@@ -262,5 +338,61 @@ describe('calendarBridgeModule.execute', () => {
     });
 
     expect(result).toMatchObject({ ok: false, retryable: true, errorCode: 'GOOGLE_CALENDAR_503' });
+  });
+});
+
+describe('calendarBridgeModule.scheduleFollowUp (Advanced: SMS reminder)', () => {
+  const successResult = {
+    ok: true as const,
+    statusCode: 200,
+    request: {},
+    response: {},
+    extra: { googleEventId: 'evt_abc', startIso: '2026-03-01T10:00:00.000+02:00' },
+  };
+  const reminderConfig = {
+    ...config,
+    reminderMode: 'twilio' as const,
+    reminderOffsetMinutes: 120,
+    reminderRecipientPath: '$.customer.phone',
+    reminderTemplate: 'Reminder soon',
+    reminderAccountSid: 'AC1',
+    reminderFrom: '+15551234567',
+    reminderSecret: 'tok1',
+  };
+
+  it('returns undefined when the reminder is off', () => {
+    expect(
+      calendarBridgeModule.scheduleFollowUp?.({ config, result: successResult }),
+    ).toBeUndefined();
+  });
+
+  it('computes runAt as the event start time minus the configured offset', () => {
+    // A start time well in the future, independent of "now" at test-run time, so this doesn't
+    // depend on the fixed 2026-03-01 sample (which scheduleFollowUp correctly treats as past once
+    // real time moves beyond it).
+    const startIso = new Date(Date.now() + 7 * 24 * 3600_000).toISOString();
+    const followUp = calendarBridgeModule.scheduleFollowUp?.({
+      config: reminderConfig,
+      result: { ...successResult, extra: { ...successResult.extra, startIso } },
+    });
+    expect(followUp?.runAt.getTime()).toBe(new Date(startIso).getTime() - 120 * 60_000);
+  });
+
+  it('returns undefined when the computed runAt has already passed', () => {
+    // The event starts in 1 hour, but the offset asks for a reminder a week early — already past.
+    const startIso = new Date(Date.now() + 3600_000).toISOString();
+    const followUp = calendarBridgeModule.scheduleFollowUp?.({
+      config: { ...reminderConfig, reminderOffsetMinutes: 7 * 24 * 60 },
+      result: { ...successResult, extra: { ...successResult.extra, startIso } },
+    });
+    expect(followUp).toBeUndefined();
+  });
+
+  it('returns undefined when the result has no startIso (defensive: should not happen in practice)', () => {
+    const followUp = calendarBridgeModule.scheduleFollowUp?.({
+      config: reminderConfig,
+      result: { ...successResult, extra: { googleEventId: 'evt_abc' } },
+    });
+    expect(followUp).toBeUndefined();
   });
 });

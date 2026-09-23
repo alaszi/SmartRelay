@@ -14,6 +14,7 @@ export * from './password';
 export * from './payment-provider';
 export * from './phone';
 export * from './registry';
+export * from './reminder-sms';
 export * from './retry-after';
 export * from './safe-http';
 export * from './sms-providers';

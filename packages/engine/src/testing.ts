@@ -33,12 +33,17 @@ export type EchoConfig = z.infer<typeof echoConfigSchema>;
 export function createEchoModule(
   type: RelayType = 'webhook_sms',
   priceKind: PricingKind = 'relay_http',
+  /** Test-only hook for exercising `runDeliverJob`'s generic follow-up scheduling
+   * (packages/db/src/deliver.ts) without needing the real calendar-bridge module + a mocked
+   * Google Calendar API. Undefined (the default) matches every other module with no follow-up. */
+  scheduleFollowUp?: RelayModule<EchoConfig>['scheduleFollowUp'],
 ): RelayModule<EchoConfig> {
   return {
     type,
     configSchema: echoConfigSchema,
     priceKind: () => priceKind,
     sampleInput: () => ({ message: 'hello' }),
+    ...(scheduleFollowUp ? { scheduleFollowUp } : {}),
     async execute({ config, payload, ctx }) {
       let body: string;
       try {

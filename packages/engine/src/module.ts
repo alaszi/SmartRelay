@@ -55,6 +55,18 @@ export interface RelayModule<TConfig> {
   }) => Promise<ModuleResult>;
   /** Prefills the "Send Test Payload" step. */
   sampleInput: () => unknown;
+  /**
+   * Optional: called once after a successful delivery, letting a module schedule a delayed
+   * follow-up action (Module 4's Advanced "SMS reminder" is the only user today) without the
+   * pipeline needing any module-specific knowledge of what the follow-up is — it just persists a
+   * `scheduled_reminders` row and a delayed job for whatever `runAt` comes back. Returns undefined
+   * when the module has nothing to schedule (not configured, or the computed time has already
+   * passed).
+   */
+  scheduleFollowUp?: (args: {
+    config: TConfig;
+    result: ModuleSuccess;
+  }) => { runAt: Date } | undefined;
 }
 
 /**
