@@ -84,7 +84,7 @@ export interface TestApp {
 export function buildTestApp(
   overrides: Partial<Env> = {},
   modules: ModuleRegistry = defaultTestModules(),
-  extra: Partial<Pick<AppContext, 'google' | 'stripe' | 'http'>> = {},
+  extra: Partial<Pick<AppContext, 'google' | 'paymentProvider' | 'http'>> = {},
 ): TestApp {
   const env = testEnv(overrides);
   const dbHandle = createDb(env.DATABASE_URL);

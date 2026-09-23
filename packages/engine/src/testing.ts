@@ -1,8 +1,23 @@
+import Stripe from 'stripe';
 import { z } from 'zod';
 import type { PricingKind, RelayType } from '@smartrelay/shared';
 import type { RelayModule } from './module';
 import { SafeHttpError } from './safe-http';
 import { renderTemplate, TemplateError } from './template';
+
+/**
+ * Signs a webhook payload exactly the way Stripe does (a real `Stripe-Signature` header,
+ * verifiable by the unmodified `PaymentProvider.handleWebhook`), so integration tests can prove
+ * replay-idempotency against the real signature-verification code path instead of mocking it away.
+ * `new Stripe(...)` here needs no real API key: `webhooks.generateTestHeaderString` is a local HMAC
+ * computation, no network call. Never imported from production code.
+ */
+export function signStripeWebhookForTest(input: { payload: string; secret: string }): string {
+  return new Stripe('sk_test_unused').webhooks.generateTestHeaderString({
+    payload: input.payload,
+    secret: input.secret,
+  });
+}
 
 /**
  * Test-only fixture (MASTER_PLAN Phase 2: "Ship with a fake echo module used only in tests to

@@ -11,6 +11,7 @@ export * from './module-chat-relay';
 export * from './module-email-api';
 export * from './module-webhook-sms';
 export * from './password';
+export * from './payment-provider';
 export * from './phone';
 export * from './registry';
 export * from './retry-after';

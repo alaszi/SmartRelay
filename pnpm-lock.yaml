@@ -244,9 +244,6 @@ importers:
       pino:
         specifier: 10.3.1
         version: 10.3.1
-      stripe:
-        specifier: 22.6.2
-        version: 22.6.2(@types/node@22.20.3)
       zod:
         specifier: 4.6.5
         version: 4.6.5
@@ -422,6 +419,9 @@ importers:
       nodemailer:
         specifier: ^7.0.13
         version: 7.0.13
+      stripe:
+        specifier: 22.6.2
+        version: 22.6.2(@types/node@22.20.3)
       zod:
         specifier: 4.6.5
         version: 4.6.5

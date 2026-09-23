@@ -3,12 +3,12 @@ import {
   createProductionModuleRegistry,
   createSafeHttpClient,
   createSmtpMailer,
+  createStripePaymentProvider,
   keyringFromEnv,
 } from '@smartrelay/engine';
 import { DELIVER_QUEUE_NAME, loadEnvOrExit } from '@smartrelay/shared';
 import { Queue } from 'bullmq';
 import Redis from 'ioredis';
-import Stripe from 'stripe';
 import { buildApp } from './app';
 
 const env = loadEnvOrExit();
@@ -27,7 +27,10 @@ const google =
   env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
     ? { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET }
     : undefined;
-const stripe = env.STRIPE_SECRET_KEY ? new Stripe(env.STRIPE_SECRET_KEY) : undefined;
+const paymentProvider =
+  env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SECRET
+    ? createStripePaymentProvider(env.STRIPE_SECRET_KEY, env.STRIPE_WEBHOOK_SECRET)
+    : undefined;
 const app = buildApp({
   env,
   db,
@@ -38,7 +41,7 @@ const app = buildApp({
   modules,
   http,
   ...(google ? { google } : {}),
-  ...(stripe ? { stripe } : {}),
+  ...(paymentProvider ? { paymentProvider } : {}),
 });
 
 try {
