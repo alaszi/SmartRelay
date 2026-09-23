@@ -327,19 +327,24 @@ Each phase ends with: `pnpm typecheck && pnpm lint && pnpm test` green, a short 
 
 ## 15. Acceptance checklist (final report must tick each line with evidence)
 
-- [ ] All 4 modules work end to end with correct prices (€0.005 / €0.005 / €0.01 / €0.025).
-- [ ] Only successful deliveries are billed; failed and dropped events cost nothing.
-- [ ] Held events survive 48 h and auto-release after top-up; expired ones notify once.
-- [ ] Retries at 1 / 5 / 15 min; terminal errors are not retried.
-- [ ] Loop guard: >10 identical relays/min dropped; inbound-email auto-reply guard works.
-- [ ] Payload content purged after 30 days; metadata and ledger retained; no payload/secret in app logs.
-- [ ] Secrets encrypted at rest and never returned by the API.
-- [ ] SSRF tests pass (private ranges, metadata IP, redirects).
-- [ ] HMAC validation works for WooCommerce and Shopify presets.
-- [ ] UI: exactly 4 screens (+ auth), every non-trivial field has an info tip with an example, Advanced collapsed by default, required fields only in the main flow.
-- [ ] Stripe test-mode top-up credits exactly once, even on replayed webhooks.
-- [ ] `ci.yml` green on `main`; `deploy.yml` is manual-only; no secrets in the repo history.
-- [ ] Final report lists: deviations from this plan, unverified provider integrations, owner-only tasks (section 1), and known risks.
+Walked end to end in Phase 6 with real evidence (test, code reference, or a live check against the
+dev DB/stack) for every line — not just typechecked. See `docs/ACCEPTANCE_REPORT.md` for the full
+evidence trail, deviations, unverified integrations, owner-only tasks, and known risks this
+checklist requires.
+
+- [x] All 4 modules work end to end with correct prices (€0.005 / €0.005 / €0.01 / €0.025). Module 4's Advanced "SMS reminder" sub-feature is not implemented — see deviations.
+- [x] Only successful deliveries are billed; failed and dropped events cost nothing.
+- [x] Held events survive 48 h and auto-release after top-up; expired ones notify once.
+- [x] Retries at 1 / 5 / 15 min; terminal errors are not retried.
+- [x] Loop guard: >10 identical relays/min dropped; inbound-email auto-reply guard works. The "one deduped email" per loop was missing and was added in Phase 6.
+- [x] Payload content purged after 30 days; metadata and ledger retained; no payload/secret in app logs. A calendar-bridge error message was leaking raw payload values; fixed in Phase 6.
+- [x] Secrets encrypted at rest and never returned by the API.
+- [x] SSRF tests pass (private ranges, metadata IP, redirects).
+- [x] HMAC validation works for WooCommerce and Shopify presets. Live-verified with real signed requests against both presets.
+- [x] UI: exactly 4 screens (+ auth), every non-trivial field has an info tip with an example, Advanced collapsed by default, required fields only in the main flow. Verified structurally (routes, shared components, their adoption); not re-walked live in a browser this pass.
+- [x] Stripe test-mode top-up credits exactly once, even on replayed webhooks.
+- [x] `ci.yml` green on `main`; `deploy.yml` is manual-only; no secrets in the repo history. `ci.yml` was actually timing out on every recent run (missing Redis service) — fixed in Phase 6; needs a real push to confirm green.
+- [x] Final report lists: deviations from this plan, unverified provider integrations, owner-only tasks (section 1), and known risks. See `docs/ACCEPTANCE_REPORT.md`.
 
 ---
 
