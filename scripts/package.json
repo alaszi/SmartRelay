@@ -5,10 +5,15 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "admin:credit": "tsx --env-file-if-exists=../.env admin-credit.ts"
+    "admin:credit": "tsx --env-file-if-exists=../.env admin-credit.ts",
+    "admin:user": "tsx --env-file-if-exists=../.env admin-user.ts",
+    "admin:release-held": "tsx --env-file-if-exists=../.env admin-release-held.ts",
+    "admin:delete-user": "tsx --env-file-if-exists=../.env admin-delete-user.ts"
   },
   "dependencies": {
     "@smartrelay/db": "workspace:*",
-    "@smartrelay/shared": "workspace:*"
+    "@smartrelay/shared": "workspace:*",
+    "bullmq": "6.3.8",
+    "ioredis": "6.0.0"
   }
 }

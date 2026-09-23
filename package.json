@@ -17,7 +17,10 @@
     "test:watch": "vitest",
     "db:migrate": "pnpm --filter @smartrelay/db db:migrate",
     "db:seed": "pnpm --filter @smartrelay/db db:seed",
-    "admin:credit": "pnpm --filter @smartrelay/scripts admin:credit"
+    "admin:credit": "pnpm --filter @smartrelay/scripts admin:credit",
+    "admin:user": "pnpm --filter @smartrelay/scripts admin:user",
+    "admin:release-held": "pnpm --filter @smartrelay/scripts admin:release-held",
+    "admin:delete-user": "pnpm --filter @smartrelay/scripts admin:delete-user"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

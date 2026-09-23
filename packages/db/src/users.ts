@@ -2,6 +2,39 @@ import { and, eq, gt, isNotNull, sql } from 'drizzle-orm';
 import type { Executor } from './client';
 import { users } from './schema';
 
+export interface UserDeletionSummary {
+  relayCount: number;
+  eventCount: number;
+  oauthConnectionCount: number;
+  sessionCount: number;
+}
+
+/** What `deleteUser` below would remove, without removing it — for a confirmation prompt. */
+export async function previewUserDeletion(
+  db: Executor,
+  userId: string,
+): Promise<UserDeletionSummary> {
+  const result = await db.execute<{
+    relay_count: number;
+    event_count: number;
+    oauth_connection_count: number;
+    session_count: number;
+  }>(sql`
+    select
+      (select count(*)::int from relays where user_id = ${userId}) as relay_count,
+      (select count(*)::int from events where user_id = ${userId}) as event_count,
+      (select count(*)::int from oauth_connections where user_id = ${userId}) as oauth_connection_count,
+      (select count(*)::int from sessions where user_id = ${userId}) as session_count
+  `);
+  const row = result.rows[0];
+  return {
+    relayCount: row?.relay_count ?? 0,
+    eventCount: row?.event_count ?? 0,
+    oauthConnectionCount: row?.oauth_connection_count ?? 0,
+    sessionCount: row?.session_count ?? 0,
+  };
+}
+
 export type UserRow = typeof users.$inferSelect;
 
 export type AuthErrorCode = 'EMAIL_TAKEN' | 'TOKEN_INVALID' | 'TOKEN_EXPIRED';
@@ -123,4 +156,17 @@ export async function consumePasswordResetToken(
     .returning();
   if (!user) throw new AuthError('TOKEN_INVALID', 'Reset link is invalid or has expired');
   return user;
+}
+
+/**
+ * GDPR account deletion (MASTER_PLAN section 7 & 12, `pnpm admin:delete-user`): removes all of a
+ * user's data except ledger rows required for accounting, which survive anonymized. A single
+ * `DELETE FROM users` achieves both halves by design — every foreign key into `users` is
+ * `ON DELETE CASCADE` (sessions, relays and everything under them, oauth_connections, events and
+ * their payloads/delivery attempts, notifications) except `credit_ledger.user_id` and
+ * `topups.user_id`, which are `ON DELETE SET NULL` (see `packages/db/drizzle/0001_initial_schema.sql`)
+ * so those rows survive with their amounts and timestamps intact but no longer linked to a person.
+ */
+export async function deleteUser(db: Executor, userId: string): Promise<void> {
+  await db.delete(users).where(eq(users.id, userId));
 }

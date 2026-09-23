@@ -1,14 +1,23 @@
 import { hashToken } from '@smartrelay/engine';
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { createTestDb, resetDb } from '../test/helpers';
+import {
+  createRelayWithEvent,
+  createTestDb,
+  createUser as createTestUser,
+  resetDb,
+} from '../test/helpers';
+import { adjustBalance } from './ledger';
+import { creditLedger, eventPayloads, events, oauthConnections, relays, sessions } from './schema';
 import { AuthError } from './users';
 import {
   consumeEmailVerifyToken,
   consumePasswordResetToken,
   createUser,
+  deleteUser,
   findUserByEmail,
   findUserById,
+  previewUserDeletion,
   setEmailVerifyToken,
   setPasswordResetToken,
 } from './users';
@@ -118,5 +127,74 @@ describe('password reset tokens', () => {
     await consumePasswordResetToken(handle.db, hash, 'new-a-hash');
 
     expect((await findUserById(handle.db, b.id))?.passwordHash).toBe('hb');
+  });
+});
+
+describe('GDPR account deletion', () => {
+  it('previews accurate counts, then removes everything except an anonymized ledger row', async () => {
+    const user = await createTestUser(handle.db);
+    const { relay, event } = await createRelayWithEvent(handle.db, user.id, 'HELD_NO_CREDIT');
+    await handle.db.insert(eventPayloads).values({
+      eventId: event.id,
+      payloadIn: { hello: 'world' },
+      purgeAfter: new Date(Date.now() + 1000),
+    });
+    await handle.db.insert(oauthConnections).values({
+      userId: user.id,
+      provider: 'google',
+      accountEmail: 'calendar@example.com',
+      refreshToken: 'irrelevant-for-this-test',
+      scopes: ['calendar.events'],
+    });
+    await handle.db
+      .insert(sessions)
+      .values({ id: 'session-hash', userId: user.id, expiresAt: new Date(Date.now() + 1000) });
+    const { entry } = await adjustBalance(handle.db, {
+      userId: user.id,
+      deltaMicro: 5_000_000n,
+      reason: 'test credit',
+      idempotencyKey: `test:${user.id}`,
+    });
+
+    const preview = await previewUserDeletion(handle.db, user.id);
+    expect(preview).toEqual({
+      relayCount: 1,
+      eventCount: 1,
+      oauthConnectionCount: 1,
+      sessionCount: 1,
+    });
+
+    await deleteUser(handle.db, user.id);
+
+    expect(await findUserById(handle.db, user.id)).toBeUndefined();
+    expect(await handle.db.select().from(relays).where(eq(relays.id, relay.id))).toHaveLength(0);
+    expect(await handle.db.select().from(events).where(eq(events.id, event.id))).toHaveLength(0);
+    expect(
+      await handle.db.select().from(eventPayloads).where(eq(eventPayloads.eventId, event.id)),
+    ).toHaveLength(0);
+    expect(
+      await handle.db.select().from(oauthConnections).where(eq(oauthConnections.userId, user.id)),
+    ).toHaveLength(0);
+    expect(
+      await handle.db.select().from(sessions).where(eq(sessions.userId, user.id)),
+    ).toHaveLength(0);
+
+    const [survivingEntry] = await handle.db
+      .select()
+      .from(creditLedger)
+      .where(eq(creditLedger.id, entry.id));
+    expect(survivingEntry).toMatchObject({ userId: null, deltaMicro: 5_000_000n });
+  });
+
+  it('does not touch other users', async () => {
+    const a = await createTestUser(handle.db);
+    const b = await createTestUser(handle.db);
+    await createRelayWithEvent(handle.db, a.id);
+    const { relay: bRelay } = await createRelayWithEvent(handle.db, b.id);
+
+    await deleteUser(handle.db, a.id);
+
+    expect(await findUserById(handle.db, b.id)).toMatchObject({ id: b.id });
+    expect(await handle.db.select().from(relays).where(eq(relays.id, bRelay.id))).toHaveLength(1);
   });
 });
