@@ -343,7 +343,7 @@ checklist requires.
 - [x] HMAC validation works for WooCommerce and Shopify presets. Live-verified with real signed requests against both presets.
 - [x] UI: exactly 4 screens (+ auth), every non-trivial field has an info tip with an example, Advanced collapsed by default, required fields only in the main flow. Verified structurally (routes, shared components, their adoption); not re-walked live in a browser this pass.
 - [x] Stripe test-mode top-up credits exactly once, even on replayed webhooks.
-- [x] `ci.yml` green on `main`; `deploy.yml` is manual-only; no secrets in the repo history. `ci.yml` was actually timing out on every recent run (missing Redis service) — fixed in Phase 6; needs a real push to confirm green.
+- [x] `ci.yml` green on `main`; `deploy.yml` is manual-only; no secrets in the repo history. `ci.yml` was actually timing out on every recent run (missing Redis service) — fixed and confirmed green on a real run (commit `e8d1b2d`, [run 35861783724](https://github.com/alaszi/SmartRelay/actions/runs/35861783724)).
 - [x] Final report lists: deviations from this plan, unverified provider integrations, owner-only tasks (section 1), and known risks. See `docs/ACCEPTANCE_REPORT.md`.
 
 ---

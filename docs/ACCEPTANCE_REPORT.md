@@ -148,20 +148,21 @@ live in Phase 5 (prior session) and re-confirmed passing in every full-suite run
 
 ## 12. `ci.yml` green on `main`; `deploy.yml` is manual-only; no secrets in the repo history
 
-**Mixed — one real bug found and fixed, needs a push to fully confirm.** Checked actual GitHub
-Actions run history via the API rather than assuming: the last 5 pushes' `Test` step ran for
-~14.5 minutes and was cut off by the job's 15-minute timeout, right after `Typecheck` and `Lint` both
-genuinely passed. `ci.yml` only ever provisioned Postgres; the test suite's BullMQ-backed tests need
-Redis too, and the test helpers' `ioredis` clients use `maxRetriesPerRequest: null`, so with nothing
-to connect to they retry forever instead of failing fast — `vitest.config.ts` even had a stale
-comment ("Postgres, later Redis") that was never acted on. Fixed: added a `redis:7-alpine` service
-to `ci.yml` mirroring the existing `postgres` one. **This has not been confirmed green yet** — that
-needs an actual push and a completed run, and per this project's standing rule these commits are not
-pushed without being told to. `deploy.yml`: confirmed `on: workflow_dispatch` only, no `push`
-trigger — manual-only as required. No secrets in history: scanned full git history (`git log --all
--p`) for `.env`-shaped file additions and live-looking secret patterns (Stripe live/test keys, AWS
-access keys, PEM private key headers, Slack tokens) — none found; `.env` was never committed at any
-point and is gitignored.
+**Done — one real bug found, fixed, and confirmed green.** Checked actual GitHub Actions run
+history via the API rather than assuming: the last 5 pushes' `Test` step ran for ~14.5 minutes and
+was cut off by the job's 15-minute timeout, right after `Typecheck` and `Lint` both genuinely
+passed. `ci.yml` only ever provisioned Postgres; the test suite's BullMQ-backed tests need Redis
+too, and the test helpers' `ioredis` clients use `maxRetriesPerRequest: null`, so with nothing to
+connect to they retry forever instead of failing fast — `vitest.config.ts` even had a stale comment
+("Postgres, later Redis") that was never acted on. Fixed: added a `redis:7-alpine` service to
+`ci.yml` mirroring the existing `postgres` one. Pushed and watched the run
+([run 35861783724](https://github.com/alaszi/SmartRelay/actions/runs/35861783724), commit `e8d1b2d`)
+complete in ~2m20s with every step — Typecheck, Lint, **Test**, Build, and the audit step — reporting
+`success`, not `skipped` or `cancelled`. `deploy.yml`: confirmed `on: workflow_dispatch` only, no
+`push` trigger — manual-only as required. No secrets in history: scanned full git history (`git log
+--all -p`) for `.env`-shaped file additions and live-looking secret patterns (Stripe live/test keys,
+AWS access keys, PEM private key headers, Slack tokens) — none found; `.env` was never committed at
+any point and is gitignored.
 
 ## 13. This report
 
@@ -220,8 +221,6 @@ Deviations, unverified integrations, owner-only tasks, and risks below.
 
 ## Known risks
 
-- **CI's Redis fix is unverified** until pushed and a real run completes green — flagged rather
-  than claimed.
 - **Module 4 is only partially complete** relative to section 6's spec: the core flow (create a
   calendar event) works end to end; the Advanced SMS-reminder sub-feature does not exist.
 - **`apps/worker`'s unredacted plain-text logging** is a structural gap (see deviations) — low
@@ -229,6 +228,3 @@ Deviations, unverified integrations, owner-only tasks, and risks below.
   systemic safety net against a future one.
 - **UI item 10 wasn't re-walked live in a browser** this pass; it relies on code structure and the
   existing Phase 4 Playwright smoke test rather than a fresh end-to-end check of every screen.
-- **5 commits from this pass are not yet pushed** (admin scripts, maintenance job test coverage, the
-  loop-notification fix, the CI Redis fix, the calendar-bridge log-leak fix) — standing project rule
-  is not to push without being told to.
