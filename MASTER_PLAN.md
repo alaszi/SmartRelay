@@ -332,7 +332,7 @@ dev DB/stack) for every line — not just typechecked. See `docs/ACCEPTANCE_REPO
 evidence trail, deviations, unverified integrations, owner-only tasks, and known risks this
 checklist requires.
 
-- [x] All 4 modules work end to end with correct prices (€0.005 / €0.005 / €0.01 / €0.025). Module 4's Advanced "SMS reminder" sub-feature is not implemented — see deviations.
+- [x] All 4 modules work end to end with correct prices (€0.005 / €0.005 / €0.01 / €0.025). Module 4's Advanced "SMS reminder" (checkbox + offset, delayed BullMQ job, worker-restart durability) built and live-verified against the real dev stack in a follow-up pass — see `docs/ACCEPTANCE_REPORT.md`'s addendum.
 - [x] Only successful deliveries are billed; failed and dropped events cost nothing.
 - [x] Held events survive 48 h and auto-release after top-up; expired ones notify once.
 - [x] Retries at 1 / 5 / 15 min; terminal errors are not retried.

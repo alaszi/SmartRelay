@@ -1,28 +1,35 @@
 # Acceptance report (MASTER_PLAN section 15)
 
 Walked top to bottom in Phase 6/7. Every line below has a test, a code reference, or a live check
-against the real dev database/stack — not just a typecheck. Three real bugs were found and fixed in
-the process (not just documented): the loop-detection email never existed, a calendar-bridge error
-message leaked payload content into logs, and CI's `Test` step has been timing out on every recent
-push because Redis was never provisioned. See individual commits for full detail on each.
+against the real dev database/stack — not just a typecheck. Real bugs found and fixed in the
+process (not just documented): the loop-detection email never existed; a calendar-bridge error
+message leaked payload content into logs; CI's `Test` step had been timing out on every recent push
+because Redis was never provisioned; and a relay-config validation bug that only surfaced once
+Module 4's SMS reminder gave a relay a second, independently-editable secret field. Section 15's
+original walkthrough also surfaced that Module 4's Advanced "SMS reminder" — described in full in
+section 6 — didn't exist beyond an inert DB table; it was built in a follow-up pass (see the
+addendum below) to the same standard as everything else and live-verified against the real dev
+stack. See individual commits for full detail on each.
 
 ## 1. All 4 modules work end to end with correct prices
 
-**Done**, with one caveat (see deviations). Prices: `packages/shared/src/constants.ts`'s
-`DEFAULT_PRICES_MICRO` (`relay_http: 5_000n`, `calendar_event: 10_000n`, `sms_dispatch: 25_000n`,
-i.e. €0.005/€0.01/€0.025), asserted against the plan's exact wording in
-`packages/shared/src/money.test.ts`. Each module's `priceKind()` maps to the right one
-(`module-chat-relay.ts`, `module-email-api.ts` → `relay_http`; `module-calendar-bridge.ts` →
-`calendar_event`; `module-webhook-sms.ts` → `sms_dispatch`), matching section 6's table exactly.
-Each module has its own dedicated test file
-(`module-{webhook-sms,email-api,chat-relay,calendar-bridge}.test.ts`); `runDeliverJob`'s generic
-pipeline (charges at the module's price, marks `SUCCESS`) is covered in
+**Done.** Prices: `packages/shared/src/constants.ts`'s `DEFAULT_PRICES_MICRO` (`relay_http:
+5_000n`, `calendar_event: 10_000n`, `sms_dispatch: 25_000n`, i.e. €0.005/€0.01/€0.025), asserted
+against the plan's exact wording in `packages/shared/src/money.test.ts`. Each module's
+`priceKind()` maps to the right one (`module-chat-relay.ts`, `module-email-api.ts` → `relay_http`;
+`module-calendar-bridge.ts` → `calendar_event`; `module-webhook-sms.ts` → `sms_dispatch`, and its
+Advanced SMS reminder also `sms_dispatch`), matching section 6's table exactly. Each module has its
+own dedicated test file (`module-{webhook-sms,email-api,chat-relay,calendar-bridge}.test.ts`);
+`runDeliverJob`'s generic pipeline (charges at the module's price, marks `SUCCESS`) is covered in
 `packages/db/src/deliver.int.test.ts`. Live-verified this session: a `chat_relay` (Discord) relay
 created, ingested, held for zero balance, credited, and delivered to a real reachable endpoint with
 a genuine `SUCCESS` status recorded, through the actual production Docker stack behind Nginx (Phase
-6). Module 4's Advanced "SMS reminder" was **not** re-verified live and, per the deviations section
-below, isn't actually implemented — the core Module 4 flow (create a calendar event) is complete and
-tested; the reminder sub-feature is not.
+6). Module 4's Advanced "SMS reminder" — previously a documented feature gap (see the retired
+deviation note below) — was built this session: schema, scheduling, BullMQ delayed job, worker
+re-enqueue-on-start durability, UI, and tests, then live-verified against the real dev stack (a real
+running worker process picked up a delayed job, made a genuine HTTPS call to Twilio's real API, and
+correctly handled both a live network failure and a simulated crash-recovery restart — full detail
+below).
 
 ## 2. Only successful deliveries are billed
 
@@ -130,11 +137,11 @@ either → `401 HMAC_INVALID`.
 plus the 5 auth pages (`login`, `register`, `forgot-password`, `reset-password`, `verify-email`).
 All six required shared components exist (`InfoTip`, `AdvancedSection`, `SecretInput`,
 `JsonPathInput`, `TemplateInput`, `CopyField`) and are actually used across the four module-specific
-forms, not just defined and orphaned: `InfoTip` appears in all four; `AdvancedSection` appears in
-`webhook-sms-form.tsx` and `email-api-form.tsx` (the two modules whose Advanced sections are actually
-built). `chat-relay-form.tsx` has no `AdvancedSection` because its Advanced feature (Telegram inline
-buttons) is deferred (known, tracked). `calendar-bridge-form.tsx` has no `AdvancedSection` because
-its Advanced feature (SMS reminder) doesn't exist — see deviations. This item relies on code
+forms, not just defined and orphaned: `InfoTip` appears in all four; `AdvancedSection` now appears
+in three of four (`webhook-sms-form.tsx`, `email-api-form.tsx`, and — as of this session —
+`calendar-bridge-form.tsx`'s new SMS reminder section). `chat-relay-form.tsx` has no
+`AdvancedSection` because its Advanced feature (Telegram inline buttons) is deferred (known,
+tracked — the only remaining case of an Advanced feature not built). This item relies on code
 structure plus the Playwright smoke test added in Phase 4, not a fresh live walkthrough at 375px
 this session.
 
@@ -170,17 +177,93 @@ Deviations, unverified integrations, owner-only tasks, and risks below.
 
 ---
 
+## Addendum: Module 4's "SMS reminder" (built this session)
+
+Found missing while first walking this checklist (documented as a deviation), then built to the
+same standard as everything else, per an explicit follow-up request. Full design and every file
+touched are in the commit history; summary:
+
+- **Schema**: `calendarBridgeConfigSchema` (`packages/engine/src/module-calendar-bridge.ts`) gained
+  a `reminderMode` discriminated union (`'off' | 'smslink' | 'twilio' | 'infobip'`), matching
+  section 6's "checkbox + offset, reveal recipient phone path and SMS provider credentials"
+  exactly. Every field is flat at the top level rather than nested under a shared `reminder`
+  object, because `configSecret` patches are a _shallow_ merge onto whatever is already stored
+  (`updateRelay`) — a nested secret field would be silently dropped by that merge whenever some
+  other top-level field changed without it. A `z.preprocess` step defaults `reminderMode` to `'off'`
+  when the field is absent entirely, so every relay saved before this feature existed keeps
+  validating exactly as it did before (verified: `apps/api/src/routes/module-calendar-bridge.e2e.int.test.ts`'s
+  existing fixtures, which predate the field, initially broke and were the signal for this fix).
+- **Pipeline wiring stayed module-agnostic.** `module.ts`'s own stated design rule is "no special
+  case in the pipeline" — so rather than teaching `runDeliverJob` about calendar_bridge
+  specifically, `RelayModule` gained an optional `scheduleFollowUp?(config, result)` hook. The
+  pipeline just calls it after a successful charge and persists whatever `{ runAt }` comes back,
+  with zero awareness of what the follow-up actually is. Only `calendarBridgeModule` implements it.
+- **Scheduling**: `runDeliverJob` (`packages/db/src/deliver.ts`) creates a `scheduled_reminders` row
+  via `createScheduledReminder` and returns its id/runAt on the `DeliverOutcome`; both callers
+  (`apps/worker/src/deliver.ts`'s BullMQ processor, and `apps/api/src/routes/relays.ts`'s "Send Test
+  Payload" route, since decision D9 already treats test sends as real billed deliveries) enqueue the
+  delayed job onto a new `reminder` BullMQ queue (`packages/shared/src/queue.ts`).
+- **Sending**: `runReminderJob` (`packages/db/src/reminders.ts`) re-validates the relay's config
+  fresh at send time (not trusted from scheduling time — a relay can be edited or deactivated in
+  between), re-checks balance, sends via `sendReminderSms` (`packages/engine/src/reminder-sms.ts`,
+  which mirrors `module-webhook-sms.ts`'s `execute()` exactly — same phone normalization, same
+  provider dispatch), and on success charges `sms_dispatch` directly against the ledger
+  (`applyLedgerEntry`, since there's no `events` row for a reminder itself). Insufficient balance at
+  send time fails outright — no charge, no send, no retry, no hold — a deliberately simpler policy
+  than the primary pipeline's HELD_NO_CREDIT/48h/auto-release machinery, since section 6 doesn't
+  specify hold semantics for reminders and building that out is its own separate scope.
+- **Durability**: `apps/worker/src/main.ts` re-enqueues every still-`pending` reminder on startup
+  (`reenqueuePendingReminders`, mirroring the existing `reenqueueStuckEvents` pattern exactly, same
+  `jobId`-is-idempotent reasoning), satisfying section 6's explicit requirement.
+- **Bug found and fixed while wiring the UI**: `apps/api/src/routes/relays.ts`'s
+  `assertValidModuleConfig` validated `request.body.configSecret` _alone_ (not merged with what
+  `updateRelay` actually keeps), which happened to work only because every module previously had
+  exactly one secret field, always resent whole. The reminder adds a second, independently-editable
+  one (`refreshToken` for Google vs. `reminderSecret` for the SMS provider) that exposed this. Fixed
+  to merge onto the existing decrypted secret the same way `updateRelay` does.
+- **UI**: `calendar-bridge-form.tsx` gained an `AdvancedSection` — checkbox, offset (minutes),
+  recipient phone JSONPath, message template, provider select, and provider-specific fields —
+  mirroring `webhook-sms-form.tsx`'s Advanced HMAC section pattern field-for-field. Also implements
+  section 6's "prefill from the user's existing SMS relay if any": on mount, if this reminder isn't
+  already configured, it fetches the user's relays and prefills the provider and its non-secret
+  fields from an existing `webhook_sms` relay (never the secret itself — write-only, section 8.1).
+- **Tests**: schema validation (each provider variant, the "off" default, rejecting an incomplete
+  enabled config) and `scheduleFollowUp`'s own runAt math in
+  `module-calendar-bridge.test.ts`; the SMS-sending logic in `reminder-sms.test.ts` (mirrors
+  `module-webhook-sms.test.ts`'s happy-path/terminal/retryable structure); the generic pipeline
+  wiring (a synthetic module's `scheduleFollowUp` creates the right DB row) in `deliver.int.test.ts`;
+  the full `runReminderJob` orchestration — success+charge, idempotent replay, cancelled when the
+  relay went inactive or the reminder was turned off, insufficient balance, terminal vs. retryable
+  provider failures, `listPendingReminders` filtering — in the new `reminders.int.test.ts`, against
+  the real Postgres test database. 878 tests pass across the whole suite.
+- **Live verification against the real dev stack** (not just typechecked, per the explicit
+  request): started the real `apps/worker` process against the real dev Postgres/Redis. (1)
+  Created a real fixture (user, calendar_bridge relay with Twilio-shaped-but-fake credentials, a
+  triggering event, a `scheduled_reminders` row) and enqueued a real 2-second-delayed BullMQ job;
+  the running worker picked it up after the delay elapsed, made a genuine HTTPS call to Twilio's
+  real API (`api.twilio.com`), received a real `401` ("Authentication Error - invalid username" —
+  Twilio's actual response to fake credentials), and correctly marked the reminder `failed` with
+  **zero** ledger charge, confirmed directly in Postgres. (2) Separately verified the durability
+  requirement: created a `pending` reminder that was deliberately **never** enqueued (simulating a
+  crash between scheduling and enqueueing, or a Redis flush), confirmed via `redis-cli` that no
+  BullMQ job existed for it and it stayed stuck, killed and restarted the real worker process, and
+  confirmed its startup `reenqueuePendingReminders()` found and processed it within seconds — the
+  exact scenario section 6's durability requirement exists for. The success+charge path itself
+  (a real `2xx` from the provider) is proven by `reminders.int.test.ts` against real Postgres with a
+  mocked HTTP response, not by a live run — no real Twilio/SMSLink/Infobip account is available in
+  this environment to obtain valid credentials, so a genuine "provider says yes" response isn't
+  something a live check here could honestly claim beyond what the mocked-HTTP integration test
+  already proves.
+
+---
+
 ## Deviations from this plan
 
 - **Telegram inline buttons** (Module 3, Advanced): deferred. Text templates and plain links work;
-  interactive buttons are not implemented. Known and tracked since Phase 4.
-- **SMS reminder** (Module 4, Advanced) — **found this session, not previously tracked.** Section 6
-  describes it fully: a checkbox + offset, stored in `scheduled_reminders` and scheduled as a
-  delayed BullMQ job, re-enqueued from the DB on worker start, billed as `sms_dispatch`. The
-  `scheduled_reminders` table exists in the schema and nothing else — no UI field, no write path, no
-  BullMQ scheduling, no worker re-enqueue logic anywhere in `apps/worker`, `packages/db`, or
-  `packages/engine`. This is a real, complete feature gap, not a small fix; it was not built as part
-  of this pass.
+  interactive buttons are not implemented. Known and tracked since Phase 4. This is now the only
+  remaining "documented in section 6, not built" gap.
+- ~~**SMS reminder** (Module 4, Advanced)~~ — found this session, built this session. See the
+  addendum above for the full design and live verification.
 - **Cloudflare `CF-Connecting-IP` range validation** (section 3): "trust `CF-Connecting-IP` only
   from Cloudflare ranges, otherwise use the socket address" was never implemented in any phase.
   Phase 6 fixed the more urgent half of this (real per-client IP attribution through Nginx, via
@@ -221,10 +304,15 @@ Deviations, unverified integrations, owner-only tasks, and risks below.
 
 ## Known risks
 
-- **Module 4 is only partially complete** relative to section 6's spec: the core flow (create a
-  calendar event) works end to end; the Advanced SMS-reminder sub-feature does not exist.
 - **`apps/worker`'s unredacted plain-text logging** is a structural gap (see deviations) — low
   current risk (one concrete leak found and fixed, nothing else found on inspection) but no
   systemic safety net against a future one.
 - **UI item 10 wasn't re-walked live in a browser** this pass; it relies on code structure and the
   existing Phase 4 Playwright smoke test rather than a fresh end-to-end check of every screen.
+- **The SMS reminder's insufficient-balance handling is simpler than the primary pipeline's**: it
+  fails outright (no send, no charge, no retry) rather than holding for 48h and auto-releasing on
+  top-up. A deliberate scope decision (section 6 doesn't specify hold semantics for reminders), not
+  an oversight — flagged here in case the owner wants it to match the primary pipeline's behavior.
+- **Reminder retry policy reuses the primary pipeline's 1/5/15-minute backoff** by choice, since
+  section 6 doesn't specify one for reminders — a reasonable default, but an interpretation, not a
+  stated requirement.
