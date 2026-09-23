@@ -55,7 +55,19 @@ const DOMAIN_ERROR_STATUS: Record<string, number> = {
 export function buildApp(ctx: AppContext): App {
   const app: App = Fastify({
     loggerInstance: createLogger(ctx.env.NODE_ENV),
-    trustProxy: ctx.env.TRUST_CLOUDFLARE,
+    // Trust exactly one hop, not `ctx.env.TRUST_CLOUDFLARE` as a blanket boolean: Nginx
+    // (deploy/nginx.smartrelay.conf) is always the sole, immediate reverse proxy in front of this
+    // process in the only supported topology (docker-compose.prod.yml), so its X-Forwarded-For
+    // entry is the real client IP regardless of whether Cloudflare additionally fronts Nginx. A
+    // boolean `true` here would trust the *whole* header, letting a client spoof its own entry;
+    // `false` ignores it entirely, which made every request through Nginx collapse onto Nginx's own
+    // container IP for rate-limiting purposes (found via Phase 6 load testing) — a sitewide
+    // rate-limit bucket shared by all users instead of one per client.
+    // TODO(verify-docs): TRUST_CLOUDFLARE is currently unused for this; MASTER_PLAN section 3 also
+    // calls for validating CF-Connecting-IP against Cloudflare's published ranges when Cloudflare is
+    // in front, which was never implemented in any phase and isn't added here — that needs Cloudflare's
+    // current IP list from https://www.cloudflare.com/ips/ and is a separate, still-open piece of work.
+    trustProxy: (_address, hop) => hop === 0,
     bodyLimit: 1024 * 1024,
   }).withTypeProvider<ZodTypeProvider>();
 
