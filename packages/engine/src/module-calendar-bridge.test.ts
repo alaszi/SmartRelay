@@ -152,6 +152,10 @@ describe('calendarBridgeModule.execute', () => {
     });
 
     expect(result).toMatchObject({ ok: false, retryable: false, errorCode: 'INVALID_START_TIME' });
+    // MASTER_PLAN section 7: no payload content in app logs. This message reaches
+    // delivery_attempts.error_message and the worker's unredacted stderr, so the invalid payload
+    // value itself must never appear in it — only which JSONPath produced it.
+    expect((result as { message: string }).message).not.toContain('not-a-date');
   });
 
   it('reports INVALID_TIME_RANGE when end <= start, without calling Google', async () => {

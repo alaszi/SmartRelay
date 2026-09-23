@@ -54,7 +54,10 @@ function extractTimestamp(
     return {
       ok: false,
       errorCode: field === 'start' ? 'INVALID_START_TIME' : 'INVALID_END_TIME',
-      message: `${field}Path ${path} value "${result.value}" is not a valid ISO 8601 timestamp`,
+      // Never the extracted value itself (MASTER_PLAN section 7: no payload content in app logs —
+      // this message ends up in delivery_attempts.error_message and the worker's stderr, neither
+      // of which are payload-safe places).
+      message: `${field}Path ${path} did not match a valid ISO 8601 timestamp`,
     };
   }
   return { ok: true, iso: dt.toISO() ?? result.value, dt };
