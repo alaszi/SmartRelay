@@ -20,6 +20,7 @@ import { registerHealthRoutes } from './routes/health';
 import { registerInboundEmailRoutes } from './routes/inbound-email';
 import { registerIngestRoutes } from './routes/ingest';
 import { registerLogsRoutes } from './routes/logs';
+import { registerGoogleOAuthRoutes } from './routes/oauth-google';
 import { registerRelayRoutes } from './routes/relays';
 import { registerTelegramCallbackRoutes } from './routes/telegram-callback';
 
@@ -137,6 +138,7 @@ export function buildApp(ctx: AppContext): App {
     registerRelayRoutes(instance, ctx, { sameOrigin });
     registerBillingRoutes(instance, ctx, { sameOrigin });
     registerLogsRoutes(instance, ctx);
+    registerGoogleOAuthRoutes(instance, ctx, { sameOrigin });
     registerIngestRoutes(instance, ctx);
     registerInboundEmailRoutes(instance, ctx);
     registerTelegramCallbackRoutes(instance, ctx);

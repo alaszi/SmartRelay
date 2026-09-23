@@ -5,6 +5,7 @@ export * from './events';
 export * from './ledger';
 export * from './migrate';
 export * from './notifications';
+export * from './oauth-connections';
 export * from './pricing';
 export * from './relays';
 export * from './schema';

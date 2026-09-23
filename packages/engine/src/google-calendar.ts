@@ -1,12 +1,45 @@
 import type { SafeHttpClient } from './safe-http';
 
-// Verified against developers.google.com/identity/protocols/oauth2/web-server#offline
-// (refreshing an access token) and developers.google.com/calendar/api/v3/reference/events/insert
-// (creating an event) plus developers.google.com/workspace/calendar/api/guides/errors (error
-// shape). Google Calendar only in v1 (MASTER_PLAN decision D4).
+// Verified against developers.google.com/identity/protocols/oauth2/web-server (the full
+// authorization-code flow: the authorize URL, the code<->token exchange, and offline access via
+// access_type=offline) and developers.google.com/calendar/api/v3/reference/events/insert (creating
+// an event) plus developers.google.com/workspace/calendar/api/guides/errors (error shape). Google
+// Calendar only in v1 (MASTER_PLAN decision D4).
+const GOOGLE_AUTHORIZE_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
+const GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v2/userinfo';
 const GOOGLE_CALENDAR_PRIMARY_EVENTS_URL =
   'https://www.googleapis.com/calendar/v3/calendars/primary/events';
+
+/** `calendar.events` is the only scope the module ever uses (least privilege, section 8.7);
+ * `userinfo.email` is requested purely so the connect flow can label the connection by account
+ * email, not for any elevated access. */
+export const GOOGLE_OAUTH_SCOPES = [
+  'https://www.googleapis.com/auth/calendar.events',
+  'https://www.googleapis.com/auth/userinfo.email',
+];
+
+/**
+ * The URL to send the user to for Google's consent screen (MASTER_PLAN section 9,
+ * `GET /api/oauth/google/start`). `access_type=offline` + `prompt=consent` guarantee a
+ * `refresh_token` in the callback's token exchange even when the user has authorized before.
+ */
+export function buildGoogleAuthorizeUrl(input: {
+  clientId: string;
+  redirectUri: string;
+  state: string;
+}): string {
+  const params = new URLSearchParams({
+    client_id: input.clientId,
+    redirect_uri: input.redirectUri,
+    response_type: 'code',
+    scope: GOOGLE_OAUTH_SCOPES.join(' '),
+    access_type: 'offline',
+    prompt: 'consent',
+    state: input.state,
+  });
+  return `${GOOGLE_AUTHORIZE_URL}?${params.toString()}`;
+}
 
 interface GoogleTokenResponse {
   access_token?: string;
@@ -66,6 +99,86 @@ export async function refreshGoogleAccessToken(input: {
     revoked: false,
     retryable: response.status >= 500,
     message: parsed?.error_description ?? `Google token refresh failed (HTTP ${response.status})`,
+  };
+}
+
+export type GoogleAuthCodeExchangeResult =
+  { ok: true; refreshToken: string; accessToken: string } | { ok: false; message: string };
+
+/**
+ * Exchanges the callback's authorization `code` for tokens (`GET /api/oauth/google/callback`).
+ * Unlike `refreshGoogleAccessToken`, this always needs a `refresh_token` in the response — Google
+ * only omits it when `access_type=offline`/`prompt=consent` were not both set on the redirect that
+ * `buildGoogleAuthorizeUrl` always sets, so a missing one here means Google changed behavior, not
+ * a normal case to silently tolerate.
+ */
+export async function exchangeGoogleAuthCode(input: {
+  clientId: string;
+  clientSecret: string;
+  code: string;
+  redirectUri: string;
+  http: SafeHttpClient;
+}): Promise<GoogleAuthCodeExchangeResult> {
+  const body = new URLSearchParams({
+    code: input.code,
+    client_id: input.clientId,
+    client_secret: input.clientSecret,
+    redirect_uri: input.redirectUri,
+    grant_type: 'authorization_code',
+  });
+
+  const response = await input.http.request({
+    url: GOOGLE_TOKEN_URL,
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  });
+
+  let parsed: (GoogleTokenResponse & { refresh_token?: string }) | undefined;
+  try {
+    parsed = JSON.parse(response.body) as GoogleTokenResponse & { refresh_token?: string };
+  } catch {
+    parsed = undefined;
+  }
+
+  if (response.status >= 200 && response.status < 300 && parsed?.access_token) {
+    if (!parsed.refresh_token) {
+      return { ok: false, message: 'Google did not return a refresh token; try connecting again' };
+    }
+    return { ok: true, refreshToken: parsed.refresh_token, accessToken: parsed.access_token };
+  }
+  return {
+    ok: false,
+    message: parsed?.error_description ?? `Google token exchange failed (HTTP ${response.status})`,
+  };
+}
+
+export type GoogleUserInfoResult = { ok: true; email: string } | { ok: false; message: string };
+
+/** Only used right after `exchangeGoogleAuthCode`, to label a connection by account email. */
+export async function fetchGoogleUserEmail(input: {
+  accessToken: string;
+  http: SafeHttpClient;
+}): Promise<GoogleUserInfoResult> {
+  const response = await input.http.request({
+    url: GOOGLE_USERINFO_URL,
+    method: 'GET',
+    headers: { authorization: `Bearer ${input.accessToken}` },
+  });
+
+  let parsed: { email?: string } | undefined;
+  try {
+    parsed = JSON.parse(response.body) as { email?: string };
+  } catch {
+    parsed = undefined;
+  }
+
+  if (response.status >= 200 && response.status < 300 && typeof parsed?.email === 'string') {
+    return { ok: true, email: parsed.email };
+  }
+  return {
+    ok: false,
+    message: `Could not read the connected Google account's email (HTTP ${response.status})`,
   };
 }
 
