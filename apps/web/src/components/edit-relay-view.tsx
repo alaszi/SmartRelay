@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { CopyField } from '@/components/copy-field';
+import { GoogleConnectionNotice } from '@/components/google-connection-notice';
 import { RELAY_FORMS } from '@/components/relay-forms';
 import { TestPayloadPanel } from '@/components/test-payload-panel';
 import { Button } from '@/components/ui/button';
@@ -59,6 +60,7 @@ export function EditRelayView({
 
   return (
     <div className="mx-auto flex max-w-xl flex-col gap-6">
+      <GoogleConnectionNotice />
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-gray-900">{relay.name}</h1>
         <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard')}>

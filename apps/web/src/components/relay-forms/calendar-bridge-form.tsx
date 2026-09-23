@@ -3,11 +3,11 @@
 import { useState } from 'react';
 import { InfoTip } from '@/components/info-tip';
 import { JsonPathInput } from '@/components/json-path-input';
-import { SecretInput } from '@/components/secret-input';
 import { TemplateInput } from '@/components/template-input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { SAMPLE_PAYLOADS } from '@/lib/sample-payloads';
+import { GoogleConnectionField } from './google-connection-field';
 import { saveRelayConfig, type RelayFormProps } from './shared';
 
 export function CalendarBridgeForm({ relayId, configPublic, hasSecret, onSaved }: RelayFormProps) {
@@ -18,7 +18,6 @@ export function CalendarBridgeForm({ relayId, configPublic, hasSecret, onSaved }
     (configPublic['startPath'] as string) ?? '$.booking.start',
   );
   const [endPath, setEndPath] = useState((configPublic['endPath'] as string) ?? '$.booking.end');
-  const [refreshToken, setRefreshToken] = useState('');
   const [saving, setSaving] = useState(false);
 
   const samplePayload = SAMPLE_PAYLOADS.calendar_bridge;
@@ -26,34 +25,17 @@ export function CalendarBridgeForm({ relayId, configPublic, hasSecret, onSaved }
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setSaving(true);
-    const ok = await saveRelayConfig(
-      relayId,
-      { titleTemplate, startPath, endPath },
-      refreshToken ? { refreshToken } : undefined,
-    );
+    // The Google connection saves itself immediately when connected or picked (see
+    // GoogleConnectionField) — it isn't part of this submit, since attaching it needs a server
+    // round-trip (the refresh token is never sent to the browser to bundle into this PATCH).
+    const ok = await saveRelayConfig(relayId, { titleTemplate, startPath, endPath }, undefined);
     setSaving(false);
     if (ok) onSaved();
   }
 
   return (
     <form className="flex flex-col gap-4" onSubmit={(e) => void handleSubmit(e)}>
-      <div className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
-        The one-click "Connect Google" flow ships in a later update. For now, paste a Google OAuth
-        refresh token with the <code className="font-mono">calendar.events</code> scope.
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center gap-1">
-          <Label htmlFor="refreshToken">Google refresh token</Label>
-          <InfoTip title="Encrypted at rest; never shown again after saving." />
-        </div>
-        <SecretInput
-          id="refreshToken"
-          value={refreshToken}
-          onChange={setRefreshToken}
-          hasExistingValue={hasSecret}
-        />
-      </div>
+      <GoogleConnectionField relayId={relayId} connected={hasSecret} />
 
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center gap-1">
