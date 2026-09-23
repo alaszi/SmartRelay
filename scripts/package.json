@@ -1,0 +1,14 @@
+{
+  "name": "@smartrelay/scripts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "admin:credit": "tsx --env-file-if-exists=../.env admin-credit.ts"
+  },
+  "dependencies": {
+    "@smartrelay/db": "workspace:*",
+    "@smartrelay/shared": "workspace:*"
+  }
+}

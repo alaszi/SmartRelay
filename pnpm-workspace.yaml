@@ -1,6 +1,7 @@
 packages:
   - apps/*
   - packages/*
+  - scripts
 
 # No dependency may run install scripts (MASTER_PLAN section 8.8). esbuild ships prebuilt
 # binaries through optional dependencies and does not need its postinstall step.
