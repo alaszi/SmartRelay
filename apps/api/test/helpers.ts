@@ -8,7 +8,7 @@ import {
   type RecordingMailer,
 } from '@smartrelay/engine';
 import { createEchoModule } from '@smartrelay/engine/testing';
-import { DELIVER_QUEUE_NAME, type Env } from '@smartrelay/shared';
+import { DELIVER_QUEUE_NAME, REMINDER_QUEUE_NAME, type Env } from '@smartrelay/shared';
 import { Queue } from 'bullmq';
 import { sql } from 'drizzle-orm';
 import Redis from 'ioredis';
@@ -95,6 +95,9 @@ export function buildTestApp(
   const deliverQueue = new Queue(`${DELIVER_QUEUE_NAME}-test-${randomUUID()}`, {
     connection: redis,
   });
+  const reminderQueue = new Queue(`${REMINDER_QUEUE_NAME}-test-${randomUUID()}`, {
+    connection: redis,
+  });
 
   // Test destinations bind to a random ephemeral port, so every port must be allowed (the default
   // allow-list is just 80/443). Address-level SSRF checks are covered elsewhere
@@ -110,6 +113,7 @@ export function buildTestApp(
     keyring,
     mailer,
     deliverQueue,
+    reminderQueue,
     modules,
     http,
     ...extra,
@@ -124,6 +128,8 @@ export function buildTestApp(
       await app.close();
       await deliverQueue.obliterate({ force: true }).catch(() => undefined);
       await deliverQueue.close();
+      await reminderQueue.obliterate({ force: true }).catch(() => undefined);
+      await reminderQueue.close();
       await dbHandle.close();
       redis.disconnect();
     },

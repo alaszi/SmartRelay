@@ -6,7 +6,7 @@ import {
   createStripePaymentProvider,
   keyringFromEnv,
 } from '@smartrelay/engine';
-import { DELIVER_QUEUE_NAME, loadEnvOrExit } from '@smartrelay/shared';
+import { DELIVER_QUEUE_NAME, loadEnvOrExit, REMINDER_QUEUE_NAME } from '@smartrelay/shared';
 import { Queue } from 'bullmq';
 import Redis from 'ioredis';
 import { buildApp } from './app';
@@ -20,6 +20,7 @@ const mailer = createSmtpMailer({
   from: env.MAIL_FROM,
 });
 const deliverQueue = new Queue(DELIVER_QUEUE_NAME, { connection: redis });
+const reminderQueue = new Queue(REMINDER_QUEUE_NAME, { connection: redis });
 
 const modules = createProductionModuleRegistry();
 const http = createSafeHttpClient();
@@ -38,6 +39,7 @@ const app = buildApp({
   keyring,
   mailer,
   deliverQueue,
+  reminderQueue,
   modules,
   http,
   ...(google ? { google } : {}),

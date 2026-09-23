@@ -15,6 +15,7 @@ import {
 } from '@smartrelay/db';
 import {
   createRelayInputSchema,
+  DELIVER_MAX_ATTEMPTS,
   formatMicroEur,
   updateRelayInputSchema,
   type RelayType,
@@ -126,11 +127,19 @@ export function registerRelayRoutes(
         if (!existing || existing.userId !== request.authUser!.id) {
           throw new HttpError(404, 'RELAY_NOT_FOUND', 'Relay not found');
         }
+        // Merge onto the existing secret the same way updateRelay() actually will, not
+        // request.body.configSecret alone: a "Replace" only ever sends the one field being
+        // changed (secrets are write-only), so validating just that field was previously correct
+        // only by accident, for modules with exactly one secret field always resent whole. Module
+        // 4's reminder adds a second, independently-updatable one (refreshToken vs reminderSecret).
+        const existingSecret = decryptRelaySecret(ctx.keyring, existing);
         assertValidModuleConfig(
           ctx,
           existing.type,
           request.body.configPublic ?? existing.configPublic,
-          request.body.configSecret ?? decryptRelaySecret(ctx.keyring, existing),
+          request.body.configSecret
+            ? { ...existingSecret, ...request.body.configSecret }
+            : existingSecret,
         );
       }
       const relay = await updateRelay(
@@ -192,6 +201,23 @@ export function registerRelayRoutes(
         },
         { eventId: event.id, attemptNo: 1 },
       );
+
+      // A test send is a real, billed delivery (decision D9 above), so it can schedule a real
+      // reminder too (Module 4's Advanced "SMS reminder") — mirrors apps/worker/src/deliver.ts's
+      // own enqueue step for the same DeliverOutcome shape.
+      if (outcome.kind === 'success' && outcome.scheduledReminder) {
+        const { reminderId, runAt } = outcome.scheduledReminder;
+        await ctx.reminderQueue.add(
+          'reminder',
+          { reminderId },
+          {
+            jobId: reminderId,
+            delay: Math.max(0, runAt.getTime() - Date.now()),
+            attempts: DELIVER_MAX_ATTEMPTS,
+            backoff: { type: 'custom' },
+          },
+        );
+      }
 
       const finished = await getEventById(ctx.db, event.id);
       return {

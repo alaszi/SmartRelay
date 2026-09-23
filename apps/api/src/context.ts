@@ -6,7 +6,7 @@ import type {
   PaymentProvider,
   SafeHttpClient,
 } from '@smartrelay/engine';
-import type { DeliverJobData, Env } from '@smartrelay/shared';
+import type { DeliverJobData, Env, ReminderJobData } from '@smartrelay/shared';
 import type { Queue } from 'bullmq';
 import type Redis from 'ioredis';
 
@@ -18,6 +18,10 @@ export interface AppContext {
   keyring: Keyring;
   mailer: Mailer;
   deliverQueue: Queue<DeliverJobData>;
+  /** Module 4's Advanced "SMS reminder" (MASTER_PLAN section 6) — the "Send Test Payload" route
+   * (a real, billed delivery, decision D9) can schedule one the same as a worker-processed event
+   * can, so this app needs to be able to enqueue the delayed job too. */
+  reminderQueue: Queue<ReminderJobData>;
   /** Empty in production until Phase 3 ships real adapters; tests inject a fake module. */
   modules: ModuleRegistry;
   /** Used for the handful of API-initiated provider calls (e.g. acknowledging a Telegram button
