@@ -11,11 +11,18 @@ import {
 import { chargeEvent } from './ledger';
 import { getPriceMicro } from './pricing';
 import { decryptRelaySecret, getRelayInternal } from './relays';
+import { createScheduledReminder } from './reminders';
 
 export type DeliverOutcome =
   /** The event was already terminal (SUCCESS/FAILED): a safe no-op, e.g. a replayed job. */
   | { kind: 'noop' }
-  | { kind: 'success' }
+  | {
+      kind: 'success';
+      /** Set when the module scheduled a follow-up (Module 4's SMS reminder). The caller (the
+       * queue-specific processor) is the one that actually enqueues the delayed job — this
+       * function stays queue-agnostic, same as the rest of its contract. */
+      scheduledReminder?: { reminderId: string; runAt: Date };
+    }
   /** Must not be retried, regardless of attempts remaining. */
   | { kind: 'terminal'; errorCode: string; message: string }
   /** May be retried; the caller decides the backoff/retry mechanics. */
@@ -123,7 +130,18 @@ export async function runDeliverJob(
     const priceKind = relayModule.priceKind(parsedConfig.data);
     const priceMicro = await getPriceMicro(db, priceKind);
     await chargeEvent(db, { eventId, priceMicro, finalStatusCode: result.statusCode });
-    return { kind: 'success' };
+
+    const followUp = relayModule.scheduleFollowUp?.({ config: parsedConfig.data, result });
+    if (!followUp) return { kind: 'success' };
+    const reminder = await createScheduledReminder(db, {
+      eventId,
+      relayId: relay.id,
+      runAt: followUp.runAt,
+    });
+    return {
+      kind: 'success',
+      scheduledReminder: { reminderId: reminder.id, runAt: followUp.runAt },
+    };
   }
 
   if (!result.retryable) {

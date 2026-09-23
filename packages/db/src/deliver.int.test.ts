@@ -10,6 +10,7 @@ import { runDeliverJob, type DeliverDeps } from './deliver';
 import { createEvent, getEventById } from './events';
 import { creditTopup, getBalance } from './ledger';
 import { createRelay } from './relays';
+import { getReminderById } from './reminders';
 
 let handle: DbHandle;
 let deps: DeliverDeps;
@@ -140,6 +141,56 @@ describe('runDeliverJob: success', () => {
     expect(await runDeliverJob(handle.db, deps, { eventId: event.id, attemptNo: 1 })).toEqual({
       kind: 'noop',
     });
+  });
+});
+
+describe('runDeliverJob: follow-up scheduling (Module 4 SMS reminder, generic pipeline wiring)', () => {
+  it('creates a scheduled_reminders row when the module schedules a follow-up, and returns it', async () => {
+    const runAt = new Date(Date.now() + 3600_000);
+    const modules: ModuleRegistry = {
+      webhook_sms: createEchoModule('webhook_sms', 'sms_dispatch', () => ({ runAt })),
+    };
+    const localDeps: DeliverDeps = { ...deps, modules };
+    const user = await newUser();
+    const url = await startDestination((_req, res) => res.end('ok'));
+    const relay = await newRelay(user.id, url);
+    const event = await newEvent(relay.id, user.id);
+
+    const outcome = await runDeliverJob(handle.db, localDeps, { eventId: event.id, attemptNo: 1 });
+
+    expect(outcome.kind).toBe('success');
+    const reminderId = (outcome as { scheduledReminder?: { reminderId: string; runAt: Date } })
+      .scheduledReminder?.reminderId;
+    expect(reminderId).toBeTruthy();
+    const reminder = await getReminderById(handle.db, reminderId!);
+    expect(reminder).toMatchObject({ eventId: event.id, relayId: relay.id, status: 'pending' });
+    expect(reminder?.runAt.getTime()).toBe(runAt.getTime());
+  });
+
+  it('does not schedule anything when the module has no follow-up hook', async () => {
+    const user = await newUser();
+    const url = await startDestination((_req, res) => res.end('ok'));
+    const relay = await newRelay(user.id, url);
+    const event = await newEvent(relay.id, user.id);
+
+    const outcome = await runDeliverJob(handle.db, deps, { eventId: event.id, attemptNo: 1 });
+
+    expect(outcome).toEqual({ kind: 'success' });
+  });
+
+  it('does not schedule anything when the follow-up hook returns undefined', async () => {
+    const modules: ModuleRegistry = {
+      webhook_sms: createEchoModule('webhook_sms', 'sms_dispatch', () => undefined),
+    };
+    const localDeps: DeliverDeps = { ...deps, modules };
+    const user = await newUser();
+    const url = await startDestination((_req, res) => res.end('ok'));
+    const relay = await newRelay(user.id, url);
+    const event = await newEvent(relay.id, user.id);
+
+    const outcome = await runDeliverJob(handle.db, localDeps, { eventId: event.id, attemptNo: 1 });
+
+    expect(outcome).toEqual({ kind: 'success' });
   });
 });
 

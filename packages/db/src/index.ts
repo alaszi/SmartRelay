@@ -8,6 +8,7 @@ export * from './notifications';
 export * from './oauth-connections';
 export * from './pricing';
 export * from './relays';
+export * from './reminders';
 export * from './schema';
 export * from './sessions';
 export * from './users';

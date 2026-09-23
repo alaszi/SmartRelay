@@ -13,3 +13,12 @@ export const DELIVER_MAX_ATTEMPTS = DELIVER_RETRY_DELAYS_MS.length + 1;
 export function deliverBackoffMs(attemptsMade: number): number | undefined {
   return DELIVER_RETRY_DELAYS_MS[attemptsMade - 1];
 }
+
+/** Module 4's Advanced "SMS reminder" (MASTER_PLAN section 6): a delayed job scheduled for one
+ * `scheduled_reminders` row, separate from the `deliver` queue since it isn't triggered by an
+ * incoming payload. Reuses `deliver`'s retry policy for consistency. */
+export const REMINDER_QUEUE_NAME = 'reminder';
+
+export interface ReminderJobData {
+  reminderId: string;
+}

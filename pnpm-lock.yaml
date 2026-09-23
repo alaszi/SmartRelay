@@ -401,6 +401,9 @@ importers:
       drizzle-kit:
         specifier: 0.31.10
         version: 0.31.10
+      msw:
+        specifier: 2.15.0
+        version: 2.15.0(@types/node@22.20.3)(typescript@6.0.3)
 
   packages/engine:
     dependencies:
