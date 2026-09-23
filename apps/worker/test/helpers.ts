@@ -7,7 +7,7 @@ import {
   type ModuleRegistry,
 } from '@smartrelay/engine';
 import { createEchoModule } from '@smartrelay/engine/testing';
-import { DELIVER_QUEUE_NAME } from '@smartrelay/shared';
+import { DELIVER_QUEUE_NAME, REMINDER_QUEUE_NAME } from '@smartrelay/shared';
 import { Queue } from 'bullmq';
 import { sql } from 'drizzle-orm';
 import Redis from 'ioredis';
@@ -62,6 +62,9 @@ export function buildTestWorkerContext(
   const deliverQueue = new Queue(`${DELIVER_QUEUE_NAME}-test-${randomUUID()}`, {
     connection: redis,
   });
+  const reminderQueue = new Queue(`${REMINDER_QUEUE_NAME}-test-${randomUUID()}`, {
+    connection: redis,
+  });
   // Test destinations bind to a random ephemeral port, so every port must be allowed here (the
   // default allow-list is just 80/443). Address-level SSRF checks are still exercised elsewhere
   // (packages/engine/src/safe-http.test.ts); this test client only relaxes what test servers need.
@@ -93,6 +96,7 @@ export function buildTestWorkerContext(
     keyring,
     mailer,
     deliverQueue,
+    reminderQueue,
     modules,
     http,
   };
@@ -102,6 +106,8 @@ export function buildTestWorkerContext(
     close: async () => {
       await deliverQueue.obliterate({ force: true }).catch(() => undefined);
       await deliverQueue.close();
+      await reminderQueue.obliterate({ force: true }).catch(() => undefined);
+      await reminderQueue.close();
       await dbHandle.close();
       redis.disconnect();
     },

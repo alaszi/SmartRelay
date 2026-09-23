@@ -1,5 +1,5 @@
 import { runDeliverJob } from '@smartrelay/db';
-import type { DeliverJobData } from '@smartrelay/shared';
+import { DELIVER_MAX_ATTEMPTS, type DeliverJobData } from '@smartrelay/shared';
 import { UnrecoverableError, type Job } from 'bullmq';
 import type { WorkerContext } from './context';
 
@@ -25,7 +25,21 @@ export function createDeliverProcessor(ctx: WorkerContext) {
 
     switch (outcome.kind) {
       case 'noop':
+        return;
       case 'success':
+        if (outcome.scheduledReminder) {
+          const { reminderId, runAt } = outcome.scheduledReminder;
+          await ctx.reminderQueue.add(
+            'reminder',
+            { reminderId },
+            {
+              jobId: reminderId,
+              delay: Math.max(0, runAt.getTime() - Date.now()),
+              attempts: DELIVER_MAX_ATTEMPTS,
+              backoff: { type: 'custom' },
+            },
+          );
+        }
         return;
       case 'terminal':
         throw new UnrecoverableError(outcome.message);
