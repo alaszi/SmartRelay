@@ -1,0 +1,15 @@
+# Host node_modules would carry pnpm symlinks pointing at absolute host paths that don't exist
+# inside the build container; every Dockerfile installs its own via pnpm install.
+node_modules
+**/node_modules
+
+.git
+**/dist
+**/.next
+**/test-results
+**/playwright-report
+**/blob-report
+.env
+.env.*
+!.env.example
+*.log

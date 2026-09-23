@@ -1,7 +1,10 @@
 name: Deploy (manual)
 
-# Manual-only until the owner picks a production host (MASTER_PLAN D8). Pushing to main must
-# never deploy. Phase 6 replaces the placeholder step with the SSH deploy (deploy/deploy.sh).
+# Manual-only (MASTER_PLAN decision D8): pushing to main must never deploy. Requires three repo
+# secrets the owner sets once the production host is chosen (section 1, owner-only): DEPLOY_HOST,
+# DEPLOY_USER, DEPLOY_SSH_KEY (the private key matching a public key already authorized on that
+# host, for a user that can run `docker compose` there — see deploy/deploy.sh's comments for what
+# it expects to find at $SMARTRELAY_DEPLOY_DIR, default /opt/smartrelay).
 on:
   workflow_dispatch:
 
@@ -13,10 +16,17 @@ jobs:
     name: Deploy
     runs-on: ubuntu-latest
     steps:
-      - name: Get latest code
-        uses: actions/checkout@v4
-
-      - name: No deployment target configured
+      - name: Check deploy secrets are configured
         run: |
-          echo "::error::No production host has been chosen yet. Nothing was deployed."
-          exit 1
+          if [ -z "${{ secrets.DEPLOY_HOST }}" ]; then
+            echo "::error::DEPLOY_HOST (and DEPLOY_USER, DEPLOY_SSH_KEY) are not set yet — no production host has been chosen. Nothing was deployed."
+            exit 1
+          fi
+
+      - name: Run deploy/deploy.sh on the production host
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: bash /opt/smartrelay/deploy/deploy.sh
