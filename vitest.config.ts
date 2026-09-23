@@ -14,7 +14,7 @@ export default defineConfig({
         },
       },
       {
-        // Integration tests need the docker-compose services (Postgres, later Redis). They share one
+        // Integration tests need the docker-compose services (Postgres, Redis). They share one
         // test database, so files run one at a time.
         test: {
           name: 'integration',

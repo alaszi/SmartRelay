@@ -32,6 +32,19 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
+      # BullMQ-backed tests (deliver queue, loop guard, release-held) need a real Redis. Without
+      # this, ioredis's maxRetriesPerRequest: null (apps/api and apps/worker test helpers) retries
+      # the connection forever instead of failing fast, hanging the Test step until the job's
+      # 15-minute timeout kills it — found by checking actual CI run history, not assumed working.
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     steps:
       - name: Get latest code
         uses: actions/checkout@v4
