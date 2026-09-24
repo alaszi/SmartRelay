@@ -1,11 +1,15 @@
 # Acceptance report (MASTER_PLAN section 15)
 
 Walked top to bottom in Phase 6/7. Every line below has a test, a code reference, or a live check
-against the real dev database/stack — not just a typecheck. Real bugs found and fixed in the
-process (not just documented): the loop-detection email never existed; a calendar-bridge error
-message leaked payload content into logs; CI's `Test` step had been timing out on every recent push
-because Redis was never provisioned; and a relay-config validation bug that only surfaced once
-Module 4's SMS reminder gave a relay a second, independently-editable secret field. Section 15's
+against the real dev database/stack — not just a typecheck, and "CI is green" was verified by
+reading the Annotations panel on real runs, not by trusting the top-level badge alone. Real bugs
+found and fixed in the process (not just documented): the loop-detection email never existed; a
+calendar-bridge error message leaked payload content into logs; CI's `Test` step had been timing
+out on every recent push because Redis was never provisioned; a relay-config validation bug that
+only surfaced once Module 4's SMS reminder gave a relay a second, independently-editable secret
+field; and two real high-severity CVEs in `nodemailer` that a `continue-on-error` audit step was
+correctly warning about but not blocking on — found by taking a green badge with a visible error
+annotation seriously instead of assuming the badge alone meant nothing was wrong. Section 15's
 original walkthrough also surfaced that Module 4's Advanced "SMS reminder" — described in full in
 section 6 — didn't exist beyond an inert DB table; it was built in a follow-up pass (see the
 addendum below) to the same standard as everything else and live-verified against the real dev
@@ -155,21 +159,44 @@ live in Phase 5 (prior session) and re-confirmed passing in every full-suite run
 
 ## 12. `ci.yml` green on `main`; `deploy.yml` is manual-only; no secrets in the repo history
 
-**Done — one real bug found, fixed, and confirmed green.** Checked actual GitHub Actions run
-history via the API rather than assuming: the last 5 pushes' `Test` step ran for ~14.5 minutes and
-was cut off by the job's 15-minute timeout, right after `Typecheck` and `Lint` both genuinely
-passed. `ci.yml` only ever provisioned Postgres; the test suite's BullMQ-backed tests need Redis
-too, and the test helpers' `ioredis` clients use `maxRetriesPerRequest: null`, so with nothing to
-connect to they retry forever instead of failing fast — `vitest.config.ts` even had a stale comment
-("Postgres, later Redis") that was never acted on. Fixed: added a `redis:7-alpine` service to
-`ci.yml` mirroring the existing `postgres` one. Pushed and watched the run
-([run 35861783724](https://github.com/alaszi/SmartRelay/actions/runs/35861783724), commit `e8d1b2d`)
-complete in ~2m20s with every step — Typecheck, Lint, **Test**, Build, and the audit step — reporting
-`success`, not `skipped` or `cancelled`. `deploy.yml`: confirmed `on: workflow_dispatch` only, no
-`push` trigger — manual-only as required. No secrets in history: scanned full git history (`git log
---all -p`) for `.env`-shaped file additions and live-looking secret patterns (Stripe live/test keys,
-AWS access keys, PEM private key headers, Slack tokens) — none found; `.env` was never committed at
-any point and is gitignored.
+**Done — two real bugs found, fixed, and confirmed green by checking the Annotations panel, not
+just the badge.**
+
+**Bug 1 (Redis).** Checked actual GitHub Actions run history via the API rather than assuming: the
+last 5 pushes' `Test` step ran for ~14.5 minutes and was cut off by the job's 15-minute timeout,
+right after `Typecheck` and `Lint` both genuinely passed. `ci.yml` only ever provisioned Postgres;
+the test suite's BullMQ-backed tests need Redis too, and the test helpers' `ioredis` clients use
+`maxRetriesPerRequest: null`, so with nothing to connect to they retry forever instead of failing
+fast — `vitest.config.ts` even had a stale comment ("Postgres, later Redis") that was never acted
+on. Fixed: added a `redis:7-alpine` service to `ci.yml` mirroring the existing `postgres` one.
+
+**Bug 2 (a genuinely contradictory green badge).** After the Redis fix, the run's top-level badge
+read "Success," but its Annotations panel showed "1 error" — "Process completed with exit code 1."
+Every individual step (including a fresh run triggered by an unrelated later push, to rule out a
+one-off) independently reported `success` via the Checks API, so this wasn't a masked
+Typecheck/Lint/Test/Build failure. Root-caused by reproducing it locally: `pnpm audit
+--audit-level=high` genuinely exits 1 in ~1.3s (matching the CI step's exact duration both times),
+because `nodemailer@7.0.13` carries two real high-severity advisories (GHSA-p6gq-j5cr-w38f: the
+`raw` message option bypasses `disableFileAccess`/`disableUrlAccess` — arbitrary file read + SSRF;
+GHSA-2x7j-588g-ccc2: O(n²) address parsing — DoS). `ci.yml`'s Audit step has `continue-on-error:
+true` by design (documented, deliberate "warn, don't block" policy in `SECURITY_CHECKLIST.md`) —
+exactly why the step's own conclusion stayed "success" while the annotation still surfaced the real
+underlying failure honestly, rather than hiding it. Checked nodemailer's actual changelog before
+upgrading (not guessed): v8's only breaking change is an error-code rename this codebase never
+checks; v9's is TLS validation on remote-content fetching (attachments/OAuth2), which
+`createSmtpMailer` never does; v10 needs Node 20+, already satisfied. Upgraded to `^10.0.10`; no
+usage changes needed; full suite (878 tests) still green; `pnpm audit --audit-level=high` now exits
+0 locally (3 remaining findings are transitive dev-tooling, moderate/low, already below this
+project's documented threshold). Pushed and verified on a third run
+([run 35963047330](https://github.com/alaszi/SmartRelay/actions/runs/35963047330), commit
+`fd7a77f`): badge green **and** the Annotations panel now shows only the two pre-existing,
+GitHub-infrastructure-level notices (Node 20 deprecation on the runner, Ubuntu 26 migration) —
+zero failure-level annotations.
+
+`deploy.yml`: confirmed `on: workflow_dispatch` only, no `push` trigger — manual-only as required.
+No secrets in history: scanned full git history (`git log --all -p`) for `.env`-shaped file
+additions and live-looking secret patterns (Stripe live/test keys, AWS access keys, PEM private key
+headers, Slack tokens) — none found; `.env` was never committed at any point and is gitignored.
 
 ## 13. This report
 
